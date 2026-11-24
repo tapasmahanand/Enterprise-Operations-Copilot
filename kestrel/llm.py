@@ -49,6 +49,8 @@ class SupervisorDecision(BaseModel):
     route: Route
     risk_level: Literal["low", "medium", "high"]
     proposed_action: Literal["credit", "fee_reversal", "chargeback", "card_block", "escalate_complaint", "none"]
+    dispute_reason: Literal["not_received", "not_as_described", "refund_not_processed"] | None = Field(
+        default=None, description="For a merchant dispute (chargeback) only; KB-NOTE-ACQ reason codes")
     card_last4: str | None = Field(default=None, description="Last 4 digits of a card mentioned, if any")
     amount_inr: int | None = Field(default=None, description="Amount the customer mentions, in rupees (informational only)")
     customer_shared_credentials: bool | None = Field(
@@ -113,6 +115,12 @@ class FakeLLM(LLM):
             elif "charged twice" in u or "duplicate" in u:
                 d = SupervisorDecision(intent="transaction_charged_twice", route="action", risk_level="medium",
                                        proposed_action="credit", rationale="duplicate charge")
+            elif "fee" in u or "charge on my statement" in u:
+                d = SupervisorDecision(intent="extra_charge_on_statement", route="action", risk_level="medium",
+                                       proposed_action="fee_reversal", rationale="fee dispute")
+            elif "change" in u and any(w in u for w in ("mobile", "email", "address")):
+                d = SupervisorDecision(intent="out_of_scope", route="refuse", risk_level="high",
+                                       proposed_action="none", rationale="contact detail change")
             elif any(w in u for w in ("policy", "what is", "how long", "liability", "rule")):
                 d = SupervisorDecision(intent="card_payment_not_recognised", route="rag", risk_level="low",
                                        proposed_action="none", rationale="policy question")

@@ -234,3 +234,14 @@ CREATE TABLE IF NOT EXISTS escalations (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (case_id, level)
 );
+
+CREATE TABLE IF NOT EXISTS mock_chargebacks (
+    chargeback_id   TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL UNIQUE,         -- idempotent per case (D18)
+    txn_id          TEXT NOT NULL,
+    reason_code     TEXT NOT NULL,
+    amount_inr      INT  NOT NULL,
+    evidence        JSONB NOT NULL DEFAULT '[]',
+    status          TEXT NOT NULL DEFAULT 'filed',
+    filed_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);

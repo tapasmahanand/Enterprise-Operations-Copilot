@@ -44,7 +44,7 @@ app = FastAPI(title="Kestrel Resolution Copilot", version="0.2.0", lifespan=life
 # Raw agent text waits here (in memory only) between POST /chat and GET /stream. It is
 # never written anywhere unmasked; if the app restarts in those seconds the run is lost
 # and the agent resends (D19).
-_PENDING: dict[str, tuple[float, str, str, str | None]] = {}
+_PENDING: dict[str, tuple[float, str, str, str | None, int]] = {}
 _LOCK = threading.Lock()
 PENDING_TTL_S = 120
 
@@ -92,6 +92,7 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=2, max_length=4000)
     session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     account_id: str | None = Field(default=None, pattern=r"^[A-Z0-9]{3,16}$")
+    idv_level: int = Field(default=0, ge=0, le=3, description="Caller verification level the agent completed (KB-SOP-IDV)")
 
 
 @app.post("/chat")
@@ -107,7 +108,7 @@ def chat(body: ChatIn, x_role: str | None = Header(default=None)) -> dict:
     with _LOCK:
         for k in [k for k, v in _PENDING.items() if now - v[0] > PENDING_TTL_S]:
             del _PENDING[k]
-        _PENDING[run_id] = (now, session_id, body.message, body.account_id)
+        _PENDING[run_id] = (now, session_id, body.message, body.account_id, body.idv_level)
     return {"run_id": run_id, "session_id": session_id, "thread_id": session_id, "stream": f"/stream/{run_id}"}
 
 
@@ -121,7 +122,7 @@ def stream(run_id: str) -> StreamingResponse:
         pending = _PENDING.pop(run_id, None)
     if pending is None:
         raise HTTPException(404, "unknown or already-streamed run")
-    _, session_id, message, account_id = pending
+    _, session_id, message, account_id, idv_level = pending
 
     def gen():
         from kestrel.graphs.chat import stream_run
@@ -130,7 +131,7 @@ def stream(run_id: str) -> StreamingResponse:
         t0 = time.perf_counter()
         yield _sse({"type": "start", "run_id": run_id, "session_id": session_id})
         try:
-            for ev in stream_run(run_id, session_id, message, account_id):
+            for ev in stream_run(run_id, session_id, message, account_id, idv_level):
                 if ev.get("type") == "final":
                     final = ev
                 yield _sse(ev)

@@ -24,7 +24,7 @@ from psycopg.types.json import Jsonb
 
 from kestrel.checkpoint import get_checkpointer
 from kestrel.db import connect
-from kestrel.tools.bank import draft_customer_notification, submit_credit
+from kestrel.tools.bank import draft_customer_notification, initiate_chargeback, submit_credit
 from kestrel.tracing import root_span, traced
 
 log = logging.getLogger("case_graph")
@@ -64,18 +64,29 @@ def route_decision(state: CaseState) -> str:
 
 @traced("execute_action")
 def execute_action(state: CaseState) -> dict:
-    a = state["action"]
-    if a["action"] != "credit":
-        raise ValueError(f"case graph cannot execute {a['action']!r} yet")  # M3: fee reversal, chargeback
-    res = submit_credit(case_id=state["case_id"], account_id=a["account_id"], txn_id=a.get("txn_id"),
-                        amount_inr=a["amount_inr"], kind=a.get("kind", "shadow_credit"),
-                        reason=a.get("reason", "approved by supervisor"))
-    if not res.ok:
-        _set_case(state["case_id"], "failed", {"error": res.error})
-        return {"status": "failed", "_trace": {"status": "error", "detail": {"error": res.error}}}
-    _set_case(state["case_id"], "approved", {"credit": res.data})
+    """Runs only after approval. Every write here is idempotent by case_id (D18)."""
+    a, cid = state["action"], state["case_id"]
+    if a["action"] in ("credit", "fee_reversal"):
+        res = submit_credit(case_id=cid, account_id=a["account_id"], txn_id=a.get("txn_id"),
+                            amount_inr=a["amount_inr"], kind=a.get("kind", "shadow_credit"),
+                            reason=a.get("reason", "approved by supervisor"))
+        tool, key = "submit_credit", "credit"
+    elif a["action"] == "chargeback":
+        with connect() as conn:
+            ev = conn.execute("SELECT evidence FROM cases WHERE case_id = %s", (cid,)).fetchone()[0]
+        ids = [e["chunk_id"] for e in ev if e.get("chunk_id")] + [e["txn"]["txn_id"] for e in ev if e.get("txn")]
+        res = initiate_chargeback(case_id=cid, txn_id=a["txn_id"], reason_code=a["kind"],
+                                  amount_inr=a["amount_inr"], evidence_ids=ids)
+        tool, key = "initiate_chargeback", "chargeback"
+    else:
+        res = None
+    if res is None or not res.ok:
+        err = res.error if res else f"cannot execute {a['action']!r}"
+        _set_case(cid, "failed", {"error": err})
+        return {"status": "failed", "_trace": {"status": "error", "detail": {"error": err}}}
+    _set_case(cid, "approved", {key: res.data})
     return {"credit": res.data, "status": "approved",
-            "_trace": {"detail": {"tool": "submit_credit", "credit_id": res.data["credit_id"], "attempts": res.attempts}}}
+            "_trace": {"detail": {"tool": tool, "result": res.data, "attempts": res.attempts}}}
 
 
 @traced("notify")
@@ -89,7 +100,10 @@ def notify(state: CaseState) -> dict:
                   "ticket_id": ticket,
                   # value date = when the credit was actually posted, not the RBI due date
                   "value_date": (state.get("credit") or {}).get("posted_at", date.today().isoformat())[:10]}
-        tpl, final = "credit_approved", "closed"
+        tpl = {"fee_reversal": "fee_reversed", "chargeback": "chargeback_raised"}.get(a["action"], "credit_approved")
+        if tpl == "chargeback_raised":
+            fields.pop("value_date")
+        final = "closed"
     else:
         fields = {"ticket_id": ticket, "reason": d.get("reason") or "not approved after review"}
         tpl, final = "credit_rejected", "rejected"

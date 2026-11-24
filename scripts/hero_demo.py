@@ -46,7 +46,7 @@ def main() -> None:
     c = httpx.Client(base_url=a.base, timeout=60)
     wait_healthy(a.base)
 
-    run = c.post("/chat", json={"message": HERO}, headers={"X-Role": "agent"}).json()
+    run = c.post("/chat", json={"message": HERO, "idv_level": 2}, headers={"X-Role": "agent"}).json()
     events, t0, first = [], time.perf_counter(), None
     with c.stream("GET", run["stream"]) as r:
         for line in r.iter_lines():
