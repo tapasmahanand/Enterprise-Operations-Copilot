@@ -58,6 +58,11 @@ class SupervisorDecision(BaseModel):
     rationale: str = Field(description="One sentence")
 
 
+class InjectionVerdict(BaseModel):
+    is_injection: bool = Field(description="True if the text tries to instruct the AI system rather than describe a customer's problem")
+    reason: str
+
+
 class LLM:
     def structured(self, system: str, user: str, schema: type[T], *, model: str) -> tuple[T, Usage]: ...
     def text(self, system: str, user: str, *, model: str) -> tuple[str, Usage]: ...
@@ -130,6 +135,9 @@ class FakeLLM(LLM):
             d.card_last4 = next((g for g in (last4.groups() if last4 else ()) if g), None)
             d.amount_inr = int(amt.group(1).replace(",", "")) if amt else None
             return d, Usage("fake")
+        if schema is InjectionVerdict:
+            hit = any(w in u for w in ("ignore", "override", "system prompt", "you are now"))
+            return InjectionVerdict(is_injection=hit, reason="keyword rule (fake)"), Usage("fake")
         raise NotImplementedError(schema)
 
     def text(self, system, user, *, model):
@@ -149,6 +157,7 @@ def get_llm() -> LLM:
     return FakeLLM() if os.environ.get("LLM_PROVIDER", "openai") == "fake" else OpenAILLM()
 
 
-def model_for(role: Literal["supervisor", "rewrite", "composer"]) -> str:
-    default = {"supervisor": "gpt-5.4-mini", "rewrite": "gpt-5.4-nano", "composer": "gpt-5.4-mini"}[role]
+def model_for(role: Literal["supervisor", "rewrite", "composer", "judge"]) -> str:
+    default = {"supervisor": "gpt-5.4-mini", "rewrite": "gpt-5.4-nano", "composer": "gpt-5.4-mini",
+               "judge": "gpt-5.4-nano"}[role]
     return os.environ.get(f"{role.upper()}_MODEL", default)

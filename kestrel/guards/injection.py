@@ -30,3 +30,16 @@ def injection_score(text: str, source: str = "input") -> tuple[float, list[str]]
     hits = [(name, w) for name, w, p in _PATTERNS
             if p.search(text) and not (source == "document" and name in _INPUT_ONLY)]
     return sum(w for _, w in hits), [n for n, _ in hits]
+
+
+def sanitize_document(text: str) -> tuple[str, list[str]]:
+    """Retrieved text is data. Drop each line that looks like an instruction aimed at the
+    model (document-mode score >= 0.5, or an HTML comment), keep the rest (D30)."""
+    kept, removed = [], []
+    for line in text.splitlines():
+        hidden = line.strip().startswith("<!--")
+        if hidden or injection_score(line, "document")[0] >= 0.5:
+            removed.append(line.strip()[:200])
+        else:
+            kept.append(line)
+    return "\n".join(kept), removed

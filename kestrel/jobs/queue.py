@@ -16,7 +16,7 @@ from psycopg.types.json import Jsonb
 from kestrel.db import connect
 
 LEASE = timedelta(minutes=5)
-JOB_TYPES = {"enron_compliance_scan", "tat_sweep"}
+JOB_TYPES = {"enron_compliance_scan", "tat_sweep", "memory_summary"}
 
 
 def enqueue(job_type: str, payload: dict[str, Any] | None = None, *, requested_by: str = "system",

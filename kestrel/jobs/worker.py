@@ -13,11 +13,11 @@ import socket
 import time
 import traceback
 
-from kestrel.jobs import enron_scan, queue, tat_sweep
+from kestrel.jobs import enron_scan, memory_summary, queue, tat_sweep
 from kestrel.tracing import record_event, root_span
 
 log = logging.getLogger("worker")
-HANDLERS = {"enron_compliance_scan": enron_scan.run, "tat_sweep": tat_sweep.run}
+HANDLERS = {"enron_compliance_scan": enron_scan.run, "tat_sweep": tat_sweep.run, "memory_summary": memory_summary.run}
 
 
 def run_one(worker_id: str) -> bool:
