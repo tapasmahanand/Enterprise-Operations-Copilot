@@ -286,7 +286,7 @@ def draft_action(state: ChatState) -> dict:
     action = {"action": "credit", "kind": kind, "amount_inr": amount,  # amount from the lookup, never the customer (D4)
               "account_id": txn["account_id"], "txn_id": txn["txn_id"], "card_last4": txn.get("card_last4"),
               "merchant": txn.get("merchant"), "approver_role": req.approver_role, "risk_level": sup["risk_level"],
-              "intent": sup["intent"], "value_date": calc.get("shadow_credit_due") if calc else None,
+              "intent": sup["intent"], "due_by": calc.get("shadow_credit_due") if calc else None,
               "reason": f"{sup['intent']}: {txn['txn_id']} ₹{amount:,}"}
     evidence = [{"chunk_id": h["chunk_id"], "title": h["title"], "score": h["score"]} for h in state.get("hits", [])]
     evidence.append({"tool": "transaction_lookup", "txn": txn})
@@ -392,6 +392,17 @@ def compliance_out(state: ChatState) -> dict:
                ".]\n\nFacts from bank systems:\n" + _facts(state))
         _emit("replace_answer", text=ans)
     script = _script(state)
+    if (d := state.get("draft")) and res["verdict"] == "allow":
+        # The supervisor sees the chunks the answer actually cited, plus the tool evidence.
+        cited = [{"chunk_id": h["chunk_id"], "title": h["title"], "score": h["score"]}
+                 for h in state.get("hits", []) if h["chunk_id"] in res["citations"]]
+        tools = [{"tool": "transaction_lookup", "txn": state.get("txn")}]
+        if state.get("card_block"):
+            tools.append({"tool": "block_card", "result": state["card_block"]})
+        with connect() as conn:
+            conn.execute("UPDATE drafts SET evidence = %s WHERE draft_id = %s AND case_id IS NULL",
+                         (Jsonb(cited + tools), d["draft_id"]))
+            conn.commit()
     out = {"answer": ans, "citations": res["citations"], "script": script, "output_check": res,
            "_trace": {"status": "blocked" if res["verdict"] == "block" else "ok", "detail": res}}
     _emit("final", answer=ans, citations=res["citations"], script=script, draft=state.get("draft"),

@@ -86,7 +86,9 @@ def notify(state: CaseState) -> dict:
     ticket = state["case_id"]
     if d["decision"] == "approve":
         fields = {"amount": f"{a['amount_inr']:,}", "last4": a.get("card_last4") or "XXXX",
-                  "ticket_id": ticket, "value_date": a.get("value_date") or date.today().isoformat()}
+                  "ticket_id": ticket,
+                  # value date = when the credit was actually posted, not the RBI due date
+                  "value_date": (state.get("credit") or {}).get("posted_at", date.today().isoformat())[:10]}
         tpl, final = "credit_approved", "closed"
     else:
         fields = {"ticket_id": ticket, "reason": d.get("reason") or "not approved after review"}
