@@ -15,6 +15,13 @@ class NotFound(Exception):
     pass
 
 
+class Forbidden(Exception):
+    pass
+
+
+TIER_RANK = {"team_lead": 1, "cards_team_lead": 1, "payments_ops_lead": 1, "ops_manager": 2, "regional_ops_head": 3}
+
+
 class Conflict(Exception):
     def __init__(self, existing: dict[str, Any]):
         super().__init__("already decided")
@@ -59,6 +66,13 @@ def decide(approval_id: str, decision: str, approver_id: str, reason: str | None
         raise ValueError("decision must be approve or reject")
     new_state = "approved" if decision == "approve" else "rejected"
     with connect() as conn:
+        need = conn.execute("SELECT approver_role FROM approvals WHERE approval_id = %s", (approval_id,)).fetchone()
+        who = conn.execute("SELECT role FROM org_directory WHERE person_id = %s", (approver_id,)).fetchone()
+        if need is None:
+            raise NotFound(approval_id)
+        # Matrix tier check (KB-MATRIX): the approver must be at or above the required tier.
+        if who is None or TIER_RANK.get(who[0], 0) < TIER_RANK.get(need[0] or "team_lead", 1):
+            raise Forbidden(f"{approver_id} ({who[0] if who else 'unknown'}) cannot approve a case that needs {need[0]}")
         won = conn.execute(
             """UPDATE approvals SET state = %s, approver_id = %s, reason = %s, decided_at = now()
                WHERE approval_id = %s AND state = 'pending' RETURNING case_id""",
