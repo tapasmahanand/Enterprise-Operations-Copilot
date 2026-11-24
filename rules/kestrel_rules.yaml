@@ -1,0 +1,81 @@
+# Kestrel Bank (fictional) — machine-readable rules.
+# Single source of truth for the approval matrix, the liability calculator and the
+# failed-transaction TAT table. Every RBI figure is traceable to docs/rbi-sources.md.
+version: "2026-11-24.1"
+currency: INR
+
+calendar:
+  # Home-branch working schedule (illustrative). Banks in India close on Sundays and
+  # the 2nd and 4th Saturdays; the listed dates are fixed-date national holidays only.
+  closed_weekdays: [sunday]
+  closed_saturdays_of_month: [2, 4]
+  holidays:
+    - 2026-10-02
+    - 2026-12-25
+    - 2027-01-26
+    - 2027-08-15
+    - 2027-10-02
+
+liability_regimes:
+  - id: R17
+    applies_to_txn_before: 2027-01-01
+    zero_liability_window_working_days: 3     # R17-6ii, counted from bank communication
+    limited_liability_window_working_days: 7  # R17-7ii
+    caps_inr:                                 # R17-T1
+      bsbd: 5000
+      tier_10k: 10000
+      tier_25k: 25000
+    beyond_window: board_policy               # R17-8
+    shadow_credit_working_days: 10            # R17-9
+    resolution_calendar_days: 90              # R17-10
+  - id: R26
+    applies_to_txn_on_or_after: 2027-01-01
+    zero_liability_window_calendar_days: 5    # R26-76M, counted from occurrence
+    beyond_window: board_policy
+    credit_card_shadow_reversal_calendar_days: 5   # R26-76R
+    resolution_calendar_days: {domestic: 45, cross_border: 60}  # R26-76Q
+    compensation:                             # R26-76T
+      max_gross_loss_inr: 50000
+      share_of_net_loss: 0.85
+      cap_inr: 25000
+      report_within_calendar_days: 5
+      pay_within_calendar_days: 5
+
+kestrel_policy:
+  # Kestrel Board-approved policy (fictional) where RBI defers to the bank.
+  KB-BP-1: "Reported after the RBI window: customer liable for the full transaction value, subject to case review; always routed to approval."
+  KB-INT-SC: "Shadow credit for non-credit-card products under R26: within 10 working days of notification (internal standard, not RBI-mandated)."
+  internal_shadow_credit_working_days: 10
+
+failed_txn_tat:                               # R19
+  compensation_inr_per_day: 100
+  channels:
+    atm:            {rule: R19-1a, reversal_days: 5}
+    card_to_card:   {rule: R19-2a, reversal_days: 1}
+    pos:            {rule: R19-2b, reversal_days: 5}
+    imps:           {rule: R19-3a, reversal_days: 1}
+    upi_transfer:   {rule: R19-4a, reversal_days: 1}
+    upi_merchant:   {rule: R19-4b, reversal_days: 5}
+    # card_not_present: unconfirmed — refused until checked (docs/rbi-sources.md)
+
+approval_matrix:
+  tiers:                     # approver by amount (inclusive upper bounds, INR)
+    - {role: team_lead, max_inr: 25000}
+    - {role: ops_manager, max_inr: 200000}
+    - {role: regional_ops_head, max_inr: null}
+  actions:
+    credit:            {needs_approval: true,  tiered: true}    # refund or shadow credit
+    fee_reversal:      {needs_approval: true,  tiered: true}
+    chargeback:        {needs_approval: true,  tiered: true}
+    card_block:        {needs_approval: false, tiered: false}
+    escalate_complaint: {needs_approval: false, tiered: false}
+    ticket_note:       {needs_approval: false, tiered: false}
+  repeat_dispute:
+    window_days: 90          # second dispute on same account within 90 days → one tier up
+  refuse:
+    - id: KB-REF-1
+      text: "Any action requested without completed identity verification."
+    - id: KB-REF-2
+      text: "Changing contact details from an unverified request."
+    - id: KB-REF-3
+      text: "Promising a resolution date the calculator did not produce."
