@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from kestrel.db import connect
 from kestrel.graphs.case import resume_case, start_case
+from kestrel.tracing import trace_id_for
 
 
 class NotFound(Exception):
@@ -44,10 +45,11 @@ def submit_draft(draft_id: str) -> dict[str, Any]:
         due = (calc or {}).get("shadow_credit_due") or (calc or {}).get("resolution_due")
         conn.execute("INSERT INTO sessions (session_id, user_id) VALUES (%s, 'agent') ON CONFLICT DO NOTHING", (session_id,))
         conn.execute(
-            """INSERT INTO cases (case_id, session_id, status, risk_level, evidence, recommended_action, due_at, draft_id, approver_role)
-               VALUES (%s, %s, 'pending_approval', %s, %s, %s, %s, %s, %s)""",
+            """INSERT INTO cases (case_id, session_id, status, risk_level, evidence, recommended_action, due_at, draft_id,
+                                  approver_role, trace_id)
+               VALUES (%s, %s, 'pending_approval', %s, %s, %s, %s, %s, %s, %s)""",
             (case_id, session_id, action.get("risk_level", "high"), Jsonb(evidence), Jsonb({**action, "calc": calc}),
-             due, draft_id, action.get("approver_role")))
+             due, draft_id, action.get("approver_role"), trace_id_for(case_id)))
         conn.execute(
             """INSERT INTO approvals (approval_id, case_id, thread_id, state, approver_role, action_payload)
                VALUES (%s, %s, %s, 'pending', %s, %s)""",

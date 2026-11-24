@@ -122,7 +122,7 @@ $("send").onclick = async () => {
   es.addEventListener("done", e => {
     const d = JSON.parse(e.data); es.close(); $("send").disabled = false; step("done");
     $("lat").textContent = `first progress ${Math.round(first)} ms · total ${d.latency_ms} ms`;
-    loadTrace(`/runs/${d.run_id}`);
+    loadTrace(`/runs/${d.run_id}`, d.trace_url);
   });
 };
 
@@ -161,10 +161,10 @@ function renderCase(c) {
   $("case").innerHTML = `<span class="mono">${esc(c.case_id)}</span> <span class="pill ${cls}">${esc(c.status.replace("_", " "))}</span>${extra}`;
 }
 
-async function loadTrace(path) {
+async function loadTrace(path, lfUrl) {
   const { body } = await api(path);
   const rows = (body.events || []).map(e => `<tr><td class="mono">${esc(e.node)}</td><td>${e.status === "ok" ? "" : `<span class="pill ${e.status === "error" ? "bad" : "warn"}">${esc(e.status)}</span>`}</td><td>${e.latency_ms ?? ""} ms</td><td>${e.cost_inr ? "₹" + e.cost_inr.toFixed(3) : ""}</td></tr>`).join("");
-  $("trace").innerHTML = `<table>${rows}</table><div class="muted" style="margin-top:6px">${body.total_tokens ?? 0} tokens · ₹${(body.total_cost_inr ?? 0).toFixed(3)} · <a href="${path}" target="_blank">raw</a></div>`;
+  $("trace").innerHTML = `<table>${rows}</table><div class="muted" style="margin-top:6px">${body.total_tokens ?? 0} tokens · ₹${(body.total_cost_inr ?? 0).toFixed(3)} · <a href="${path}" target="_blank">raw</a>${(lfUrl || body.trace_url) ? ` · <a href="${esc(lfUrl || body.trace_url)}" target="_blank">open in Langfuse</a>` : ""}</div>`;
 }
 
 async function loadQueue() {

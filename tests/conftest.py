@@ -7,9 +7,10 @@ import pytest
 ADMIN_URL = os.environ.get("TEST_ADMIN_DATABASE_URL", "postgresql://kestrel:kestrel@localhost:5432/kestrel")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def db_url():
-    """Create a throwaway database for the session; skip if Postgres isn't reachable."""
+    """Create a throwaway database per test module (modules seed and ingest differently);
+    skip if Postgres isn't reachable."""
     try:
         admin = psycopg.connect(ADMIN_URL, autocommit=True, connect_timeout=3)
     except psycopg.OperationalError:

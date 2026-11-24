@@ -20,6 +20,7 @@ from kestrel import cases
 from kestrel.config import get_settings
 from kestrel.db import connect
 from kestrel.guards.pii import mask_pii
+from kestrel.tracing import flush as flush_traces, trace_id_for, trace_url
 
 log = logging.getLogger("api")
 UI = Path(__file__).resolve().parents[1] / "ui" / "index.html"
@@ -99,8 +100,8 @@ def chat(body: ChatIn, x_role: str | None = Header(default=None)) -> dict:
     run_id = f"RUN-{uuid.uuid4().hex[:10]}"
     session_id = body.session_id or f"S-{uuid.uuid4().hex[:8]}"
     with connect() as conn:
-        conn.execute("INSERT INTO chat_runs (run_id, session_id, message) VALUES (%s, %s, %s)",
-                     (run_id, session_id, mask_pii(body.message).text))
+        conn.execute("INSERT INTO chat_runs (run_id, session_id, message, trace_id) VALUES (%s, %s, %s, %s)",
+                     (run_id, session_id, mask_pii(body.message).text, trace_id_for(run_id)))
         conn.commit()
     now = time.time()
     with _LOCK:
@@ -135,7 +136,8 @@ def stream(run_id: str) -> StreamingResponse:
                 yield _sse(ev)
             ms = int((time.perf_counter() - t0) * 1000)
             _set_run(run_id, "done", {**final, "latency_ms": ms})
-            yield _sse({"type": "done", "run_id": run_id, "latency_ms": ms})
+            flush_traces()
+            yield _sse({"type": "done", "run_id": run_id, "latency_ms": ms, "trace_url": trace_url(run_id)})
         except Exception as e:  # noqa: BLE001 - surface, don't hang the stream
             log.exception("run %s failed", run_id)
             _set_run(run_id, "failed", {"error": repr(e)[:500]})
@@ -162,7 +164,7 @@ def get_run(run_id: str) -> dict:
         ev = conn.execute("""SELECT node, status, latency_ms, tokens_in, tokens_out, cost_inr, detail, created_at
                              FROM run_events WHERE run_id = %s ORDER BY event_id""", (run_id,)).fetchall()
     return {"run_id": r[0], "session_id": r[1], "message_masked": r[2], "state": r[3], "result": r[4],
-            "created_at": r[5], "events": [_event(e) for e in ev], **_totals(ev)}
+            "created_at": r[5], "trace_url": trace_url(run_id), "events": [_event(e) for e in ev], **_totals(ev)}
 
 
 def _event(e) -> dict:
@@ -181,7 +183,9 @@ def _totals(ev) -> dict:
 def submit(draft_id: str, x_role: str | None = Header(default=None)) -> dict:
     _role(x_role, "agent")
     try:
-        return cases.submit_draft(draft_id)
+        out = cases.submit_draft(draft_id)
+        flush_traces()
+        return out
     except cases.NotFound:
         raise HTTPException(404, "draft not found")
 
@@ -195,7 +199,7 @@ def get_case(case_id: str) -> dict:
     with connect() as conn:
         ev = conn.execute("""SELECT node, status, latency_ms, tokens_in, tokens_out, cost_inr, detail, created_at
                              FROM run_events WHERE run_id = %s ORDER BY event_id""", (case_id,)).fetchall()
-    return {**c, "events": [_event(e) for e in ev]}
+    return {**c, "trace_url": trace_url(case_id), "events": [_event(e) for e in ev], **_totals(ev)}
 
 
 @app.get("/approvals")
@@ -216,7 +220,9 @@ def decide(approval_id: str, body: DecisionIn, x_role: str | None = Header(defau
     if body.decision == "reject" and not body.reason:
         raise HTTPException(422, "a rejection needs a reason")
     try:
-        return cases.decide(approval_id, body.decision, body.approver_id, body.reason)
+        out = cases.decide(approval_id, body.decision, body.approver_id, body.reason)
+        flush_traces()
+        return out
     except cases.NotFound:
         raise HTTPException(404, "approval not found")
     except cases.Forbidden as f:

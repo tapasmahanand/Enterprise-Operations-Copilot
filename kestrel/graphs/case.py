@@ -25,7 +25,7 @@ from psycopg.types.json import Jsonb
 from kestrel.checkpoint import get_checkpointer
 from kestrel.db import connect
 from kestrel.tools.bank import draft_customer_notification, submit_credit
-from kestrel.tracing import traced
+from kestrel.tracing import root_span, traced
 
 log = logging.getLogger("case_graph")
 
@@ -132,8 +132,9 @@ def start_case(case_id: str, approval_id: str, action: dict) -> dict:
     g = case_graph()
     if g.get_state(_cfg(case_id)).values:
         return {"started": False}
-    g.invoke({"run_id": case_id, "thread_id": case_id, "case_id": case_id,
-              "approval_id": approval_id, "action": action, "status": "pending_approval"}, _cfg(case_id))
+    with root_span(case_id, "case: submitted, waiting for approval", approval_id=approval_id):
+        g.invoke({"run_id": case_id, "thread_id": case_id, "case_id": case_id,
+                  "approval_id": approval_id, "action": action, "status": "pending_approval"}, _cfg(case_id))
     return {"started": True}
 
 
@@ -142,7 +143,8 @@ def resume_case(case_id: str, decision: dict) -> dict:
     snap = g.get_state(_cfg(case_id))
     if not snap.next:  # already finished (e.g. reconcile beat us to it)
         return dict(snap.values)
-    g.invoke(Command(resume=decision), _cfg(case_id))
+    with root_span(case_id, f"case: resumed on {decision['decision']}", approver_id=decision.get("approver_id")):
+        g.invoke(Command(resume=decision), _cfg(case_id))
     return dict(g.get_state(_cfg(case_id)).values)
 
 

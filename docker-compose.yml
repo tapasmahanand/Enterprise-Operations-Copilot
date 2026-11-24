@@ -1,4 +1,45 @@
-# docker compose up --build   → postgres, one-shot ingest, app on http://localhost:8000
+# docker compose up --build
+#   postgres → one-shot ingest → app (http://localhost:8000)
+#   self-hosted Langfuse (http://localhost:3000, login demo@kestrel.example / kestrel-demo)
+#
+# Only OPENAI_API_KEY in .env is required. Langfuse keys below are local demo
+# credentials created headlessly on first start; they are not secrets.
+
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://kestrel:kestrel@postgres:5432/langfuse
+  SALT: kestrel-demo-salt
+  ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: clickhouse
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: minio
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: miniosecret
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: kestrel-redis
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://kestrel:kestrel@postgres:5432/kestrel
+  LANGFUSE_HOST: http://langfuse-web:3000
+  LANGFUSE_PUBLIC_URL: http://localhost:3000
+  LANGFUSE_PUBLIC_KEY: pk-lf-kestrel-demo
+  LANGFUSE_SECRET_KEY: sk-lf-kestrel-demo
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -8,6 +49,7 @@ services:
       POSTGRES_DB: kestrel
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U kestrel"]
       interval: 3s
@@ -30,18 +72,105 @@ services:
   app:
     build: .
     env_file: .env
-    environment:
-      DATABASE_URL: postgresql://kestrel:kestrel@postgres:5432/kestrel
+    environment: *app-env
     depends_on:
       ingest:
         condition: service_completed_successfully
     ports:
       - "8000:8000"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 5s
       timeout: 3s
       retries: 20
 
+  # --- self-hosted Langfuse v3 (observability) -------------------------------------
+  langfuse-web:
+    image: langfuse/langfuse:3
+    depends_on: &langfuse-deps
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+      minio-init: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: kestrel-demo-nextauth
+      LANGFUSE_INIT_ORG_ID: kestrel
+      LANGFUSE_INIT_ORG_NAME: Kestrel Bank (demo)
+      LANGFUSE_INIT_PROJECT_ID: kestrel-copilot
+      LANGFUSE_INIT_PROJECT_NAME: Resolution Copilot
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-kestrel-demo
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-kestrel-demo
+      LANGFUSE_INIT_USER_EMAIL: demo@kestrel.example
+      LANGFUSE_INIT_USER_NAME: Reviewer
+      LANGFUSE_INIT_USER_PASSWORD: kestrel-demo
+    ports:
+      - "3000:3000"
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    depends_on: *langfuse-deps
+    environment: *langfuse-env
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # S3-compatible blob store Langfuse v3 needs for event uploads. SeaweedFS rather than
+  # MinIO: MinIO no longer publishes images on Docker Hub, and one registry keeps
+  # clean-machine startup simple (D24). Service keeps the name "minio" for familiarity.
+  minio:
+    image: chrislusf/seaweedfs:4.55
+    command: ["server", "-dir=/data", "-ip.bind=0.0.0.0", "-s3", "-s3.port=9000", "-s3.config=/etc/seaweedfs/s3.json"]
+    configs:
+      - source: s3_identities
+        target: /etc/seaweedfs/s3.json
+    volumes:
+      - blobs:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:9333/cluster/status >/dev/null && wget -q -S -O- http://localhost:9000/ 2>&1 | grep -q 'HTTP/'"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  minio-init:
+    image: chrislusf/seaweedfs:4.55
+    # Idempotent: create the bucket only if it is not there yet.
+    entrypoint: ["sh", "-c", "echo 's3.bucket.list' | weed shell -master=minio:9333 | grep -qw langfuse || echo 's3.bucket.create -name langfuse' | weed shell -master=minio:9333; echo 's3.bucket.list' | weed shell -master=minio:9333 | grep -qw langfuse && echo bucket ready"]
+    depends_on:
+      minio: {condition: service_healthy}
+    restart: "no"
+
+  redis:
+    image: redis:7
+    command: ["--requirepass", "kestrel-redis"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "kestrel-redis", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:
+  clickhouse:
+  blobs:
+
+configs:
+  s3_identities:
+    content: |
+      {"identities": [{"name": "langfuse",
+        "credentials": [{"accessKey": "minio", "secretKey": "miniosecret"}],
+        "actions": ["Admin", "Read", "Write", "List", "Tagging"]}]}

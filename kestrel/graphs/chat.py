@@ -44,7 +44,7 @@ from kestrel.retrieval.search import vector_search
 from kestrel.rules.approval import approval_requirement
 from kestrel.rules.loader import load_rules
 from kestrel.tools.bank import block_card, liability_calculator, transaction_lookup
-from kestrel.tracing import traced
+from kestrel.tracing import root_span, traced
 
 FRAUD_INTENTS = {"card_payment_not_recognised", "compromised_card", "lost_or_stolen_card",
                  "cash_withdrawal_not_recognised", "direct_debit_payment_not_recognised"}
@@ -351,7 +351,9 @@ def composer(state: ChatState) -> dict:
         _emit("token", text=ans)
         return {"answer": ans, "citations": [], "_trace": {"status": "blocked", "detail": {"budget": "tokens"}}}
     chunks = "\n\n".join(f"[chunk_id={h['chunk_id']}] {h['title']}\n{h['text']}" for h in state.get("hits", []))
-    user = f"AGENT NOTE (masked): {state['masked']}\n\nFACTS:\n{_facts(state)}\n\nPOLICY CHUNKS:\n{chunks or '(none)'}"
+    allowed = ", ".join(h["chunk_id"] for h in state.get("hits", [])) or "(none)"
+    user = (f"AGENT NOTE (masked): {state['masked']}\n\nFACTS:\n{_facts(state)}\n\nPOLICY CHUNKS:\n{chunks or '(none)'}"
+            f"\n\nYou may cite ONLY these chunk ids, copied exactly: {allowed}")
     parts: list[str] = []
     usage = Usage(model_for("composer"))
     for piece in get_llm().stream(COMPOSER_SYSTEM, user, model=model_for("composer")):
@@ -502,5 +504,6 @@ def run_input(run_id: str, session_id: str, message: str, account_id: str | None
 def stream_run(run_id: str, session_id: str, message: str, account_id: str | None = None):
     """Yields progress/token/draft/final events as dicts."""
     cfg = {"configurable": {"thread_id": session_id}, "recursion_limit": 20}  # node-visit budget
-    for ev in chat_graph().stream(run_input(run_id, session_id, message, account_id), cfg, stream_mode="custom"):
-        yield ev
+    with root_span(run_id, "chat_run", session_id=session_id):
+        for ev in chat_graph().stream(run_input(run_id, session_id, message, account_id), cfg, stream_mode="custom"):
+            yield ev

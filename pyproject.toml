@@ -15,6 +15,7 @@ dependencies = [
   "langgraph>=1.0",
   "langgraph-checkpoint-postgres>=3.0",
   "psycopg-pool>=3.2",
+  "langfuse>=3.0",
 ]
 
 [project.optional-dependencies]
@@ -30,3 +31,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["kestrel*"]
+
+[tool.setuptools.package-data]
+kestrel = ["ui/*.html"]
