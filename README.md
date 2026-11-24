@@ -2,7 +2,7 @@
 
 A multi-agent copilot for the tier-1 resolution desk of **Kestrel Bank**, a fictional Indian retail bank. Agents handling refund, card-dispute and unauthorised-transaction calls get a cited, RBI-aligned answer in seconds; anything that moves money is drafted, paused durably for supervisor approval, and fully traced.
 
-> Status: **Milestone 2 of 4** (hero demo end to end, including restart-safe approval). See [docs/plan.md](docs/plan.md) and [docs/design.md](docs/design.md).
+> Status: **Milestone 3 of 4** (all five workflows, guardrails, async jobs). See [docs/plan.md](docs/plan.md) and [docs/design.md](docs/design.md).
 
 ## Quick start
 
@@ -24,6 +24,22 @@ Or scripted, with a hard kill of the app between submit and approval:
 ```bash
 python scripts/hero_demo.py --restart "docker compose kill app && docker compose up -d app"
 ```
+
+Every request carries the caller's identity-verification level (`idv_level`, KB-SOP-IDV); the console defaults to level 2.
+
+All five workflows from the brief, against the running stack:
+
+```bash
+python scripts/workflows_e2e.py     # RAG, tool-assisted, approval, async job, guardrails (16 checks)
+```
+
+| Workflow | What runs |
+|---|---|
+| RAG | policy question → date-filtered retrieval → cited answer |
+| Tool-assisted | "charged twice" → transaction lookup finds the posted pair (KB-POL-DUP) → refund drafted |
+| Approval (HITL) | case paused in a Postgres checkpoint → tier-checked approval → resume, credit posted once, 409 on repeat |
+| Async job | `POST /jobs` (202) → `worker` runs the Enron compliance scan; TAT sweeper runs every 5 min |
+| Guardrailed | input injection blocked, trap lines stripped from retrieved text, matrix refusals KB-REF-1/2, output check |
 
 It checks: card blocked without approval → calculator gives zero liability and the shadow-credit due date (R17 regime, by transaction date) → shadow credit drafted for the *looked-up* amount → case pending → **app killed and restarted** → supervisor approves → case graph resumes from its Postgres checkpoint → credit posted exactly once → SMS drafted → a second decision gets 409.
 

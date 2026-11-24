@@ -161,7 +161,9 @@ A bank agent types what the customer on the phone is saying. Classify it and cho
 
 In-scope intents (BANKING77 labels):
 {intents}
-Anything else: intent=out_of_scope, route=refuse.
+The agent may also ask a general policy or process question about one of these topics (for example "what is the
+customer's liability if they report after 5 days?"): pick the closest in-scope intent and route=rag.
+Only topics unrelated to all of these (loans, account opening, small talk, ...): intent=out_of_scope, route=refuse.
 
 Routes:
 - rag: a policy/process question that needs only documents.
