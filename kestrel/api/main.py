@@ -229,3 +229,32 @@ def decide(approval_id: str, body: DecisionIn, x_role: str | None = Header(defau
         raise HTTPException(403, str(f))
     except cases.Conflict as c:
         return JSONResponse({"detail": "approval already decided", "existing": c.existing}, status_code=409)
+
+
+# --- async jobs ------------------------------------------------------------------------
+
+class JobIn(BaseModel):
+    job_type: Literal["enron_compliance_scan", "tat_sweep"]
+    payload: dict = Field(default_factory=dict)
+
+
+@app.post("/jobs", status_code=202)
+def create_job(body: JobIn, x_role: str | None = Header(default=None)) -> dict:
+    """Returns immediately with a job id; the worker container runs it."""
+    from kestrel.jobs import queue
+    role = _role(x_role, "compliance", "supervisor")
+    if body.job_type == "enron_compliance_scan" and role != "compliance":
+        raise HTTPException(403, "only the compliance role can start a compliance scan")
+    allowed = {"enron_compliance_scan": {"limit"}, "tat_sweep": {"as_of"}}[body.job_type]
+    if set(body.payload) - allowed:   # e.g. no file paths from the client
+        raise HTTPException(422, f"{body.job_type} accepts only {sorted(allowed)}")
+    return queue.enqueue(body.job_type, body.payload, requested_by=role)
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str) -> dict:
+    from kestrel.jobs import queue
+    try:
+        return queue.get_job(job_id)
+    except KeyError:
+        raise HTTPException(404, "job not found")

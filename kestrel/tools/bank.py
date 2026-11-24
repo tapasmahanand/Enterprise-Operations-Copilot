@@ -160,3 +160,30 @@ def _draft_notification(a: NotifyArgs) -> dict:
 
 def draft_customer_notification(**kw) -> ToolResult:
     return run_tool(_draft_notification, NotifyArgs, kw)
+
+
+class EscalateArgs(BaseModel):
+    case_id: str
+    level: Literal["grievance", "ombudsman_pack"] = "grievance"
+    reason: str = Field(min_length=3, max_length=500)
+    created_by: str = "agent"
+    rule_id: str | None = None
+
+
+def _escalate(a: EscalateArgs) -> dict:
+    """No approval needed (KB-MATRIX). Idempotent per (case, level)."""
+    with connect() as conn:
+        if conn.execute("SELECT 1 FROM cases WHERE case_id = %s", (a.case_id,)).fetchone() is None:
+            raise ToolError(f"case {a.case_id} not found")
+        conn.execute(
+            """INSERT INTO escalations (escalation_id, case_id, level, reason, created_by, rule_id)
+               VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (case_id, level) DO NOTHING""",
+            (f"ESC-{uuid.uuid4().hex[:8].upper()}", a.case_id, a.level, a.reason, a.created_by, a.rule_id))
+        row = conn.execute("SELECT escalation_id, created_at FROM escalations WHERE case_id = %s AND level = %s",
+                           (a.case_id, a.level)).fetchone()
+        conn.commit()
+    return {"escalation_id": row[0], "case_id": a.case_id, "level": a.level, "created_at": row[1].isoformat()}
+
+
+def escalate_complaint(**kw) -> ToolResult:
+    return run_tool(_escalate, EscalateArgs, kw)
