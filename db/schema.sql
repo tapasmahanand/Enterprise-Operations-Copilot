@@ -159,3 +159,55 @@ CREATE TABLE IF NOT EXISTS org_directory (
     team            TEXT NOT NULL,
     email           TEXT NOT NULL
 );
+
+-- Milestone 2: drafts, chat runs, mock write-side systems -----------------------
+-- A draft is what the copilot proposes; it becomes a case only when the agent
+-- clicks "Send to supervisor" (POST /drafts/{id}/submit).
+CREATE TABLE IF NOT EXISTS drafts (
+    draft_id        TEXT PRIMARY KEY,
+    session_id      TEXT NOT NULL,
+    run_id          TEXT NOT NULL,
+    action          JSONB NOT NULL,              -- {action, amount_inr, txn_id, ticket_id, approver_role, ...}
+    evidence        JSONB NOT NULL DEFAULT '[]',
+    calc            JSONB,                       -- calculator output, incl. rule_ids and due dates
+    case_id         TEXT,                        -- set on submit
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS chat_runs (
+    run_id          TEXT PRIMARY KEY,
+    session_id      TEXT NOT NULL,
+    message         TEXT NOT NULL,               -- already PII-masked by compliance_in
+    state           TEXT NOT NULL DEFAULT 'queued' CHECK (state IN ('queued', 'running', 'done', 'failed')),
+    result          JSONB,
+    trace_id        TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Posted credits. UNIQUE(case_id) makes submit_credit idempotent, so a crash between
+-- the write and the checkpoint cannot post the same credit twice on resume.
+CREATE TABLE IF NOT EXISTS mock_credits (
+    credit_id       TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL UNIQUE,
+    account_id      TEXT NOT NULL,
+    txn_id          TEXT,
+    kind            TEXT NOT NULL,               -- refund | shadow_credit
+    amount_inr      INT  NOT NULL,
+    reason          TEXT,
+    posted_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL UNIQUE,
+    channel         TEXT NOT NULL,               -- sms | email
+    body            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'draft',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS draft_id TEXT;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS approver_role TEXT;
+ALTER TABLE cases ADD COLUMN IF NOT EXISTS result JSONB;
+CREATE UNIQUE INDEX IF NOT EXISTS approvals_one_per_case ON approvals (case_id);
