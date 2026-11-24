@@ -1,0 +1,23 @@
+# In-scope BANKING77 intents for the Kestrel tier-1 resolution desk.
+# Everything else collapses to out_of_scope for routing evaluation.
+# route: the default route for a plain description of the problem (the agent's wording can change it).
+defaults_out_of_scope: {department: general_servicing, priority: low, risk_level: low, route: refuse}
+in_scope:
+  card_payment_not_recognised:      {department: fraud_disputes, priority: high,   risk_level: high,   route: action,  policy: KB-POL-LIAB}
+  cash_withdrawal_not_recognised:   {department: fraud_disputes, priority: high,   risk_level: high,   route: action,  policy: KB-POL-LIAB}
+  direct_debit_payment_not_recognised: {department: fraud_disputes, priority: high, risk_level: high,  route: action,  policy: KB-POL-LIAB}
+  compromised_card:                 {department: fraud_disputes, priority: high,   risk_level: high,   route: action,  policy: KB-SOP-BLOCK}
+  lost_or_stolen_card:              {department: cards,          priority: high,   risk_level: high,   route: action,  policy: KB-SOP-BLOCK}
+  transaction_charged_twice:        {department: disputes,       priority: medium, risk_level: medium, route: action,  policy: KB-POL-DUP}
+  request_refund:                   {department: disputes,       priority: medium, risk_level: medium, route: tools,   policy: KB-POL-REFUND}
+  Refund_not_showing_up:            {department: disputes,       priority: medium, risk_level: medium, route: tools,   policy: KB-POL-REFUND}
+  reverted_card_payment?:           {department: disputes,       priority: low,    risk_level: low,    route: rag,     policy: KB-POL-REFUND}
+  declined_cash_withdrawal:         {department: payments_ops,   priority: medium, risk_level: medium, route: tools,   policy: KB-POL-TAT}
+  wrong_amount_of_cash_received:    {department: payments_ops,   priority: medium, risk_level: medium, route: tools,   policy: KB-POL-TAT}
+  failed_transfer:                  {department: payments_ops,   priority: medium, risk_level: medium, route: tools,   policy: KB-POL-TAT}
+  transfer_not_received_by_recipient: {department: payments_ops, priority: medium, risk_level: medium, route: tools,   policy: KB-POL-TAT}
+  balance_not_updated_after_bank_transfer: {department: payments_ops, priority: low, risk_level: low,  route: rag,     policy: KB-POL-TAT}
+  extra_charge_on_statement:        {department: disputes,       priority: medium, risk_level: medium, route: tools,   policy: KB-POL-FEES}
+  card_payment_fee_charged:         {department: disputes,       priority: low,    risk_level: medium, route: rag,     policy: KB-POL-FEES}
+  cash_withdrawal_charge:           {department: disputes,       priority: low,    risk_level: medium, route: rag,     policy: KB-POL-FEES}
+  transfer_fee_charged:             {department: disputes,       priority: low,    risk_level: medium, route: rag,     policy: KB-POL-FEES}
