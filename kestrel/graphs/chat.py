@@ -235,6 +235,15 @@ def tool_exec(state: ChatState) -> dict:
     last4 = sup.get("card_last4") or ents.get("card_last4")
     as_of = anchor_date()
 
+    if state.get("idv_level", 0) < 1:
+        # KB-SOP-IDV: even a balance enquiry needs level 1. No account data is fetched, so
+        # nothing about the account can reach the answer, the script or the trace.
+        why = "caller not verified: KB-SOP-IDV level 1 is needed before any account lookup"
+        return {"tool_calls": [], "txn": None, "calc": None, "no_draft_reason": why,
+                "card_block": {"error": "not blocked: caller identity not verified (KB-SOP-IDV level 1 needed)"}
+                if sup["intent"] in FRAUD_INTENTS else None,
+                "_trace": {"status": "blocked", "detail": {"skipped": "idv_level 0", "calls": []}}}
+
     progress("tool_exec", "looking up transactions")
     lk = transaction_lookup(account_id=account, card_last4=last4, as_of=as_of)
     calls.append({"tool": "transaction_lookup", "args": {"account_id": account, "card_last4": last4},

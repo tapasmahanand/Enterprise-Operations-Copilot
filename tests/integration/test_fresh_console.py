@@ -70,6 +70,8 @@ def test_fresh_session_cannot_refund(client, message):
     assert (final["card_block"] or {}).get("status") != "blocked"
     assert _drafts_and_blocks() == before
     assert "Send to supervisor" not in final["answer"]
+    assert final["calc"] is None, "no account lookup or calculation for an unverified caller"
+    assert "T-HERO" not in final["answer"] and "T2002" not in final["answer"]
 
 
 def test_level_is_recorded_in_the_trace(client):
