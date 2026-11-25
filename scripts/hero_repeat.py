@@ -6,7 +6,7 @@ n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 c = httpx.Client(base_url="http://localhost:8000", timeout=60)
 lat, blocked = [], []
 for i in range(n):
-    run = c.post("/chat", json={"message": HERO}).json()
+    run = c.post("/chat", json={"message": HERO, "idv_level": 2}).json()
     final = done = None
     with c.stream("GET", run["stream"]) as r:
         for line in r.iter_lines():
