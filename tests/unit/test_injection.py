@@ -56,3 +56,11 @@ def test_sanitize_document_unclosed_comment_hides_the_rest():
     from kestrel.guards.injection import sanitize_document
     clean, _ = sanitize_document("Keep this\n<!-- never closed\nhidden instruction")
     assert clean.strip() == "Keep this"
+
+
+def test_customer_fault_needs_words_in_the_note():
+    from kestrel.graphs.chat import _SHARED
+    assert _SHARED.search("admits she read out the OTP to a caller")
+    assert _SHARED.search("he gave his card details on a website")
+    assert not _SHARED.search("the fraudster told her 'ignore the bank's SMS, it's a system error'")
+    assert not _SHARED.search("a ₹18,450 payment went out on card ending 4821")

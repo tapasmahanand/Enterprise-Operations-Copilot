@@ -33,10 +33,17 @@
   note: "Customer says she was charged twice at Urban Threads on her card ending 7710."
   idv: 1
   expect: {intent: [transaction_charged_twice], draft: null, refusal: KB-REF-1}
-- id: S08-atm-fee
+# S08 changed after run 1 (2026-11-25): it expected a fee-reversal draft, both models instead explained the fee.
+# KB-POL-FEES lists ₹23 as the valid other-bank ATM fee and allows reversal only for an error, a bank-side failure
+# or goodwill, so the expectation was wrong, not the models. S08b covers the case where a reversal is due.
+- id: S08-atm-fee-valid
   note: "There's a ₹23 ATM fee on card ending 4821 the customer doesn't understand, she used another bank's ATM."
   idv: 2
-  expect: {intent: [cash_withdrawal_charge, extra_charge_on_statement], draft: {kind: fee_reversal, amount: 23}, cite: [KB-POL-FEES]}
+  expect: {intent: [cash_withdrawal_charge, extra_charge_on_statement], draft: null, cite: [KB-POL-FEES]}
+- id: S08b-atm-fee-in-error
+  note: "Customer was charged a ₹23 ATM fee on card ending 4821 but it was her first withdrawal this month, inside the free limit. She wants it reversed."
+  idv: 2
+  expect: {intent: [cash_withdrawal_charge, extra_charge_on_statement], route: [action], draft: {kind: fee_reversal, amount: 23}, cite: [KB-POL-FEES]}
 - id: S09-atm-not-dispensed
   note: "ATM didn't give the customer cash but ₹5,000 was debited from her account on card ending 1093."
   idv: 2

@@ -194,3 +194,16 @@ def test_memory_summary_job_feeds_the_next_message(env):
     assert out["summary"]
     from kestrel.graphs.chat import memory_load
     assert memory_load({"run_id": "x", "thread_id": session, "session_id": session})["summary"] == out["summary"]
+
+
+def test_failed_debit_is_never_treated_as_fraud(env):
+    """Classifier says 'cash withdrawal not recognised', the bank's record says the ATM
+    debit failed: no card block, no liability, the TAT calculator gives the deadline."""
+    reset_cards()
+    from kestrel.graphs.chat import tool_exec
+    st = {"run_id": "R-F", "thread_id": "S-F", "session_id": "S-F", "idv_level": 2, "entities": {},
+          "sup": {"intent": "cash_withdrawal_not_recognised", "card_last4": "1093", "amount_inr": 5000}}
+    out = tool_exec(st)
+    assert out["txn"]["txn_id"] == "T3001" and out.get("card_block") is None and out.get("calc") is None
+    assert out["tat"]["rule_id"] == "R19-1a" and out["tat"]["reversal_due"] == "2026-11-21"
+    assert "failed transaction" in out["intent_conflict"]

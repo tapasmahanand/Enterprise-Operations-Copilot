@@ -42,6 +42,7 @@ from kestrel.ingest.seed import anchor_date
 from kestrel.llm import InjectionVerdict, SupervisorDecision, Usage, get_llm, model_for
 from kestrel.retrieval.search import vector_search
 from kestrel.rules.approval import approval_requirement
+from kestrel.rules.calculator import failed_txn_compensation
 from kestrel.rules.loader import load_rules
 from kestrel.tools.bank import block_card, liability_calculator, transaction_lookup
 from kestrel.tracing import root_span, traced
@@ -70,6 +71,8 @@ class ChatState(TypedDict, total=False):
     txn: dict[str, Any] | None
     card_block: dict[str, Any] | None
     calc: dict[str, Any] | None
+    tat: dict[str, Any] | None
+    intent_conflict: str | None
     hits: list[dict[str, Any]]
     query: str
     draft: dict[str, Any] | None
@@ -191,6 +194,11 @@ def supervisor(state: ChatState) -> dict:
         d.card_last4 = state["pii"]["card_last4"][-1]
     if state["pii"].get("secret_shared"):
         d.customer_shared_credentials = True
+    elif d.customer_shared_credentials and not _SHARED.search(state["masked"]):
+        # "Customer shared credentials" moves liability to the customer, so the LLM's flag
+        # must be backed by words in the note (eval S24: a quoted fraudster's line was read
+        # as the customer sharing an OTP). Unknown stays unknown: the agent is asked to confirm.
+        d.customer_shared_credentials = None
     refusal = _refusal(state, d)
     if refusal:
         d.route = "refuse"
@@ -199,6 +207,8 @@ def supervisor(state: ChatState) -> dict:
                                   "model": usage.model}, **usage.trace()}}
 
 
+_SHARED = re.compile(r"\b(shared|gave|give|told|tell|read out|disclosed|entered|typed|said)\b.{0,60}"
+                     r"\b(otp|pin|cvv|password|passcode|card (?:details|number)|one[- ]time)", re.I | re.S)
 _CONTACT_CHANGE = re.compile(r"\b(change|update|new)\b.{0,30}\b(mobile|phone|e-?mail|address|contact)\b", re.I)
 
 
@@ -263,10 +273,19 @@ def tool_exec(state: ChatState) -> dict:
     if txn or rows:
         out["repeat_dispute"] = _repeat_dispute((txn or rows[0])["account_id"], as_of)
 
+    # The system of record outranks the classifier: a transaction the bank recorded as
+    # failed-but-debited is a failed transaction (KB-POL-TAT), not an unauthorised one.
+    # Eval run 2: "ATM didn't give cash" was classified as cash_withdrawal_not_recognised,
+    # which blocked the card and told the agent the customer was liable for ₹5,000.
+    fraud = sup["intent"] in FRAUD_INTENTS
+    if fraud and txn and txn.get("status") == "failed_debited":
+        fraud = False
+        out["intent_conflict"] = (f"classified as {sup['intent']}, but {txn['txn_id']} is recorded as failed and debited: "
+                                  "handled as a failed transaction (KB-POL-TAT); card not blocked, no liability assessment")
     idv = state.get("idv_level", 0)
-    if sup["intent"] in FRAUD_INTENTS and (txn or rows) and idv < 1:
+    if fraud and (txn or rows) and idv < 1:
         out["card_block"] = {"error": "not blocked: caller identity not verified (KB-SOP-IDV level 1 needed)"}
-    elif sup["intent"] in FRAUD_INTENTS and (txn or rows):
+    elif fraud and (txn or rows):
         card_id = (txn or rows[0])["card_id"]
         if card_id:
             progress("tool_exec", "blocking card")
@@ -274,7 +293,19 @@ def tool_exec(state: ChatState) -> dict:
             calls.append({"tool": "block_card", "args": {"card_id": card_id}, "ok": b.ok, "error": b.error})
             out["card_block"] = b.data if b.ok else {"error": b.error}
 
-    if txn and sup["intent"] in FRAUD_INTENTS:
+    if txn and txn.get("status") == "failed_debited":
+        # KB-POL-TAT: the reversal due date and any compensation are code, never the LLM
+        # (in eval run 1 the Composer computed "T + 5" itself and the number check withheld it).
+        progress("tool_exec", "calculating reversal deadline")
+        try:
+            t = failed_txn_compensation(txn["channel"], txn["txn_date"], None, load_rules(), as_of=as_of)
+            out["tat"] = {"rule_id": t.rule_id, "reversal_due": t.reversal_due.isoformat(),
+                          "days_late": t.days_late, "compensation_inr": t.compensation_inr}
+            calls.append({"tool": "tat_calculator", "ok": True, "error": None, "args": {"channel": txn["channel"]}})
+        except ValueError as e:
+            calls.append({"tool": "tat_calculator", "ok": False, "error": str(e), "args": {"channel": txn["channel"]}})
+
+    if txn and fraud:
         progress("tool_exec", "calculating liability")
         fault = "customer" if sup.get("customer_shared_credentials") else "third_party"
         c = liability_calculator(amount_inr=txn["amount_inr"], txn_date=txn["txn_date"], reported_on=as_of,
@@ -457,6 +488,12 @@ def _facts(state: ChatState) -> str:
                      f"₹{c['customer_liability_inr']:,}; bank liability ₹{c['bank_liability_inr']:,}; shadow credit due by "
                      f"{c['shadow_credit_due']}; resolution due by {c['resolution_due']}; rule ids {', '.join(c['rule_ids'])}; "
                      f"{c['explanation']}")
+    if ic := state.get("intent_conflict"):
+        lines.append(f"NOTE: {ic}")
+    if t := state.get("tat"):
+        late = (f"{t['days_late']} days late; compensation ₹{t['compensation_inr']:,} is due automatically"
+                if t["days_late"] else "not yet late")
+        lines.append(f"failed-transaction TAT calculator ({t['rule_id']}): reversal due by {t['reversal_due']}; {late}")
     if state.get("duplicate_of"):
         lines.append(f"duplicate confirmed: {state['txn']['txn_id']} duplicates {state['duplicate_of']} (KB-POL-DUP)")
     if r := state.get("refusal"):
@@ -634,7 +671,7 @@ def chat_graph():
 # Fields that belong to one run. The session thread keeps its checkpoint across
 # messages, so each run starts by clearing these explicitly.
 _PER_RUN_RESET = {"blocked_reason": None, "refusal": None, "repeat_dispute": False, "duplicate_of": None, "sup": {}, "tool_calls": [], "txn": None, "card_block": None,
-                  "calc": None, "hits": [], "query": "", "draft": None, "no_draft_reason": None, "answer": "",
+                  "calc": None, "tat": None, "intent_conflict": None, "hits": [], "query": "", "draft": None, "no_draft_reason": None, "answer": "",
                   "citations": [], "script": None, "output_check": {}, "tokens_used": 0}
 
 
