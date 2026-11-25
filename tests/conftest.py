@@ -21,3 +21,15 @@ def db_url():
     yield f"{base}/{name}"
     admin.execute(f"DROP DATABASE {name} WITH (FORCE)")
     admin.close()
+
+
+def reset_graph_singletons():
+    """The checkpointer pool and compiled graphs are process-wide singletons bound to the
+    DATABASE_URL at first use. Each test module gets its own database, so a module that
+    builds the app must drop them first or it talks to the previous module's (dropped) DB."""
+    from kestrel.checkpoint import get_checkpointer
+    import kestrel.graphs.case as case_graph
+    import kestrel.graphs.chat as chat_graph
+    get_checkpointer.cache_clear()
+    case_graph._graph = None
+    chat_graph._graph = None

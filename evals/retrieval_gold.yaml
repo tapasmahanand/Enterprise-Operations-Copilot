@@ -1,0 +1,39 @@
+# Retrieval gold set: agent-style queries -> documents that answer them.
+# Written from the corpus titles and section headings before running any retrieval
+# variant. `relevant`: any of these documents counts as a hit. `txn_date`: the
+# transaction date the agent is dealing with, for queries whose answer depends on the
+# policy version (2017-regime vs 2027-regime liability; the 2018 edition is superseded).
+- {q: "customer liability for an unauthorised card payment reported the next day", relevant: [KB-POL-LIAB-A], txn_date: 2026-11-24, versioned: true}
+- {q: "customer reported a fraudulent UPI debit after six working days, how much is she liable for", relevant: [KB-POL-LIAB-A], txn_date: 2026-11-10, versioned: true}
+- {q: "third party breach reported within three days zero liability", relevant: [KB-POL-LIAB-A], txn_date: 2026-10-02, versioned: true}
+- {q: "maximum liability for a credit card with limit above 5 lakh reported in 4 to 7 days", relevant: [KB-POL-LIAB-A], txn_date: 2026-09-15, versioned: true}
+- {q: "fraudulent transaction in February 2027, who bears the burden of proof", relevant: [KB-POL-LIAB-B], txn_date: 2027-02-10, versioned: true}
+- {q: "customer negligence shared OTP fraud in 2027, is any compensation available", relevant: [KB-SOP-COMP, KB-POL-LIAB-B], txn_date: 2027-03-01, versioned: true}
+- {q: "unauthorised net banking transfer in January 2027 customer liability", relevant: [KB-POL-LIAB-B], txn_date: 2027-01-20, versioned: true}
+- {q: "how many days do we have to give shadow credit for an unauthorised transaction", relevant: [KB-SOP-SHADOW, KB-POL-LIAB-A], txn_date: 2026-11-24, versioned: true}
+- {q: "ATM did not dispense cash but account was debited, when is auto reversal due", relevant: [KB-POL-TAT]}
+- {q: "compensation per day for delayed reversal of a failed UPI transfer", relevant: [KB-POL-TAT, KB-FAQ-UPI]}
+- {q: "IMPS transfer failed beneficiary not credited turnaround time", relevant: [KB-POL-TAT, KB-FAQ-UPI]}
+- {q: "customer charged twice by the same merchant for one purchase", relevant: [KB-POL-DUP]}
+- {q: "how to confirm a duplicate charge before refunding", relevant: [KB-POL-DUP]}
+- {q: "merchant says refund processed but customer has not received it", relevant: [KB-POL-REFUND]}
+- {q: "card payment reverted by the merchant, when will it show", relevant: [KB-POL-REFUND]}
+- {q: "can I waive an ATM withdrawal fee charged at another bank's ATM", relevant: [KB-POL-FEES]}
+- {q: "fee reversal goodwill limit for tier one agents", relevant: [KB-POL-FEES, KB-MATRIX]}
+- {q: "who has to approve a credit of 30,000 rupees", relevant: [KB-MATRIX]}
+- {q: "approval needed for a refund over two lakh", relevant: [KB-MATRIX]}
+- {q: "goods never delivered by the merchant, can we raise a chargeback", relevant: [KB-SOP-CHARGEBACK, KB-NOTE-ACQ]}
+- {q: "dispute reason code for item not as described", relevant: [KB-NOTE-ACQ, KB-SOP-CHARGEBACK]}
+- {q: "customer lost her debit card, block it now", relevant: [KB-SOP-BLOCK]}
+- {q: "what checks do I need before changing the registered mobile number", relevant: [KB-SOP-IDV]}
+- {q: "identity verification level needed before drafting a refund", relevant: [KB-SOP-IDV]}
+- {q: "customer wants to escalate to the banking ombudsman", relevant: [KB-SOP-ESC]}
+- {q: "complaint not resolved in 30 days escalation", relevant: [KB-SOP-ESC]}
+- {q: "should the customer report the fraud to the cybercrime helpline 1930", relevant: [KB-GUIDE-NCRP]}
+- {q: "customer read out the full card number on the call, how do I record it", relevant: [KB-GUIDE-PII]}
+- {q: "what must a dispute case record for audit", relevant: [KB-STD-AUDIT]}
+- {q: "is the second Saturday a working day for deadline counting", relevant: [KB-CAL]}
+- {q: "wording of the SMS sent when a credit is approved", relevant: [KB-TPL-NOTIFY]}
+- {q: "the copilot is down, what do I tell the customer", relevant: [KB-RUNBOOK-INCIDENT]}
+- {q: "bank debited the customer twice because a standing instruction ran twice, reimburse charges", relevant: [KB-POL-REIMB]}
+- {q: "what should I say to a customer reporting an unauthorised transaction", relevant: [KB-SCRIPT-FRAUD]}

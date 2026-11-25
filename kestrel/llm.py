@@ -15,15 +15,17 @@ from pydantic import BaseModel, Field
 
 T = TypeVar("T", bound=BaseModel)
 
-# USD per 1M tokens (input, output). UNVERIFIED for the gpt-5.4 family: check
-# https://openai.com/api/pricing before quoting costs in the report.
+# USD per 1M tokens (input, output), standard tier, no caching discount applied.
+# Verified 2026-11-25 against developers.openai.com/api/docs/models/gpt-5.4-mini.md and
+# gpt-5.4-nano.md (the earlier figures here were guesses and were 2-4x too low, D40).
+# gpt-5.4-nano is marked "Deprecated" on its model page.
 PRICES_USD_PER_M = {
-    "gpt-5.4-mini": (0.25, 2.00),
-    "gpt-5.4-nano": (0.05, 0.40),
-    "gpt-4.1-mini": (0.40, 1.60),
-    "gpt-4.1": (2.00, 8.00),
+    "gpt-5.4": (2.50, 15.00),
+    "gpt-5.4-mini": (0.75, 4.50),
+    "gpt-5.4-nano": (0.20, 1.25),
+    "gpt-5-nano": (0.05, 0.40),
 }
-USD_INR = float(os.environ.get("USD_INR", "88"))
+USD_INR = float(os.environ.get("USD_INR", "88"))  # assumption, not a live rate; reports state it
 
 
 @dataclass
