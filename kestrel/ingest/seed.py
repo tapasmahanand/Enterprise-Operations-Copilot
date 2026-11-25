@@ -77,6 +77,8 @@ def seed(conn: psycopg.Connection, anchor: date | None = None, force: bool | Non
     happens when the tables are empty or RESEED=1."""
     if force is None:
         force = os.environ.get("RESEED") == "1"
+    from kestrel.auth import seed_users
+    seed_users(conn)   # login users are not demo state: created if missing, never reset
     if not force and conn.execute("SELECT EXISTS (SELECT 1 FROM mock_customers)").fetchone()[0]:
         return {"skipped": 1}
     rows = seed_rows(anchor or anchor_date())

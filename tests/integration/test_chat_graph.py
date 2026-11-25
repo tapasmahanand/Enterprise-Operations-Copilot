@@ -24,6 +24,8 @@ def env(db_url):
     from kestrel.ingest.seed import seed
     from kestrel.llm import get_llm
     get_llm.cache_clear()
+    from conftest import reset_graph_singletons
+    reset_graph_singletons()   # an earlier module (test_auth) may have bound the graphs to its database
     with connect() as conn:
         apply_schema(conn)
         seed(conn, anchor=ANCHOR, force=True)

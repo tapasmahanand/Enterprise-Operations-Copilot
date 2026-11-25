@@ -37,12 +37,13 @@ def client(db_url):
         ingest_corpus(conn, get_settings(), FakeEmbedder())
     from kestrel.api.main import app
     with TestClient(app) as c:
+        assert c.post("/auth/login", json={"username": "agent1", "password": "kestrel-demo"}).status_code == 200
         yield c
     os.environ.clear(); os.environ.update(old)
 
 
 def _ask(client, payload):
-    r = client.post("/chat", json=payload, headers={"X-Role": "agent"})
+    r = client.post("/chat", json=payload)
     assert r.status_code == 200
     events = []
     with client.stream("GET", r.json()["stream"]) as s:
