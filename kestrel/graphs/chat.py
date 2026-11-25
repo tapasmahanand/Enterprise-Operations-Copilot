@@ -34,6 +34,7 @@ import yaml
 
 from kestrel.config import ROOT, get_settings
 from kestrel.db import connect
+from kestrel.guards.credentials import credential_sharing
 from kestrel.guards.injection import injection_score, sanitize_document
 from kestrel.guards.output import check_output
 from kestrel.guards.pii import mask_pii
@@ -220,12 +221,15 @@ def supervisor(state: ChatState) -> dict:
                 d.intent, d.route, d.refusal_reason = "policy_question", "rag", None
     if not d.card_last4 and state["pii"]["card_last4"]:
         d.card_last4 = state["pii"]["card_last4"][-1]
-    if state["pii"].get("secret_shared"):
-        d.customer_shared_credentials = True
-    elif d.customer_shared_credentials and not _SHARED.search(state["masked"]):
-        # "Customer shared credentials" moves liability to the customer, so the LLM's flag
-        # must be backed by words in the note (eval S24: a quoted fraudster's line was read
-        # as the customer sharing an OTP). Unknown stays unknown: the agent is asked to confirm.
+    # "Customer shared credentials" moves liability to the customer, so it is decided from the
+    # words in the note, not from the LLM's field (D42; eval S24: a quoted fraudster's line was
+    # read as the customer sharing an OTP) and not from an OTP value merely appearing in it (D53:
+    # "got an SMS with OTP 482913 but says she did not share it" skipped the credit). If the note
+    # says neither, an LLM "true" becomes unknown and the agent is asked to confirm.
+    shared = credential_sharing(state["masked"])
+    if shared is not None:
+        d.customer_shared_credentials = shared
+    elif d.customer_shared_credentials:
         d.customer_shared_credentials = None
     override = _refusal_policy(d, state.get("idv_level", 0))
     refusal = _refusal(state, d)
@@ -286,8 +290,6 @@ def _refusal_policy(d: SupervisorDecision, idv: int) -> str | None:
     return f"llm route 'refuse' overridden for in-scope intent -> {d.route}"
 
 
-_SHARED = re.compile(r"\b(shared|gave|give|told|tell|read out|disclosed|entered|typed|said)\b.{0,60}"
-                     r"\b(otp|pin|cvv|password|passcode|card (?:details|number)|one[- ]time)", re.I | re.S)
 # Either order: "change her mobile" and "registered mobile changed to" (scope set u-a03 slipped past
 # the one-directional version; the LLM refused it, the code rule did not fire).
 _CONTACT_CHANGE = re.compile(r"\b(change[ds]?|changing|update[ds]?|updating|replace[ds]?|new)\b.{0,30}"
@@ -766,7 +768,7 @@ def run_input(run_id: str, session_id: str, message: str, account_id: str | None
     m = mask_pii(message)
     return {**_PER_RUN_RESET, "run_id": run_id, "thread_id": session_id, "session_id": session_id,
             "account_id": account_id, "idv_level": idv_level, "masked": m.text,
-            "pii": {"found": m.found, "card_last4": m.card_last4, "secret_shared": m.secret_shared}}
+            "pii": {"found": m.found, "card_last4": m.card_last4, "secret_present": m.secret_present}}
 
 
 def stream_run(run_id: str, session_id: str, message: str, account_id: str | None = None, idv_level: int = 0):

@@ -60,6 +60,22 @@ def test_hero_blocks_card_calculates_and_drafts(env):
     assert "07 December 2026" in final["script"] and "₹18,450" in final["script"]
 
 
+def test_otp_value_with_denial_still_drafts_the_credit(env):
+    """D53: an OTP value in the note used to set "customer shared credentials", which moved
+    liability to the customer and skipped the credit."""
+    reset_cards()
+    _, _, final = run(HERO + ". She got an SMS with OTP 482913 but says she did not share it")
+    assert final["calc"]["fault_assumed"] == "third_party" and final["calc"]["customer_liability_inr"] == 0
+    assert final["draft"] and final["draft"]["amount_inr"] == 18450
+
+
+def test_otp_actually_shared_still_moves_liability(env):
+    reset_cards()
+    _, _, final = run(HERO + ". She admits she read out the OTP 482913 to a caller claiming to be from the bank")
+    assert final["calc"]["fault_assumed"] == "customer"
+    assert final["draft"] is None
+
+
 def test_amount_comes_from_lookup_not_customer(env):
     reset_cards()
     _, _, final = run("Customer never made a ₹99,999 card payment on card ending 4821")
