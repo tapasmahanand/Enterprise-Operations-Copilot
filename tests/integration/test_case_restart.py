@@ -140,3 +140,17 @@ try:
 except Forbidden as f:
     print(json.dumps('forbidden'))""")
     assert out == "forbidden"
+
+
+def test_two_approved_cases_for_one_txn_post_one_credit(db):
+    """Draft-time duplicate checks can't see a case still awaiting approval; posting must (D38)."""
+    cases = []
+    for _ in range(2):
+        draft = new_draft(db)
+        cases.append(run_py(db, f"import json; from kestrel.cases import submit_draft; print(json.dumps(submit_draft({draft!r}), default=str))"))
+    outs = [run_py(db, f"""import json; from kestrel.cases import decide
+print(json.dumps(decide({c['approval']['approval_id']!r}, 'approve', 'P01', 'ok'), default=str))""") for c in cases]
+    assert outs[0]["status"] == "closed"
+    assert outs[1]["status"] == "failed" and "already credited" in outs[1]["result"]["error"]
+    with connect(db) as conn:
+        assert conn.execute("SELECT count(*) FROM mock_credits WHERE txn_id = 'T-HERO'").fetchone()[0] == 1

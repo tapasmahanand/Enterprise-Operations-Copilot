@@ -192,11 +192,14 @@ CREATE TABLE IF NOT EXISTS mock_credits (
     case_id         TEXT NOT NULL UNIQUE,
     account_id      TEXT NOT NULL,
     txn_id          TEXT,
-    kind            TEXT NOT NULL,               -- refund | shadow_credit
+    kind            TEXT NOT NULL,               -- refund | shadow_credit | fee_reversal
     amount_inr      INT  NOT NULL,
     reason          TEXT,
     posted_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- One credit per transaction, whichever case asks (D38). Two cases for the same payment
+-- can both be approved; only the first posts, the second fails with the existing credit.
+CREATE UNIQUE INDEX IF NOT EXISTS mock_credits_one_per_txn ON mock_credits (txn_id) WHERE txn_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS notifications (
     notification_id TEXT PRIMARY KEY,

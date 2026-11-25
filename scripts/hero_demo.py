@@ -19,6 +19,9 @@ import httpx
 HERO = ("Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, "
         "it went through yesterday.")
 
+RESET = ("docker compose exec -T postgres psql -q -U kestrel -d kestrel -c "
+         "\"DELETE FROM mock_credits WHERE txn_id = 'T-HERO'\"")
+
 
 def check(ok: bool, label: str) -> None:
     print(("PASS " if ok else "FAIL ") + label)
@@ -42,7 +45,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8000")
     ap.add_argument("--restart", required=True, help="shell command that kills and restarts the app")
+    ap.add_argument("--reset", default=RESET, help="shell command run first; '' to skip. The bank posts one "
+                    "credit per transaction (D38), so a second demo run needs the last run's credit removed.")
     a = ap.parse_args()
+    if a.reset:
+        subprocess.run(a.reset, shell=True, check=True)
     c = httpx.Client(base_url=a.base, timeout=60)
     wait_healthy(a.base)
 
@@ -77,14 +84,18 @@ def main() -> None:
     q = c.get("/approvals", headers={"X-Role": "supervisor"}).json()
     item = next((x for x in q if x["case_id"] == case["case_id"]), None)
     check(item is not None, "case still in supervisor queue after restart")
+    # On a reused database an earlier hero case makes this a repeat dispute, one tier up.
+    approver = {"team_lead": "P01", "ops_manager": "P03", "regional_ops_head": "P04"}[item["approver_role"]]
     res = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-                 json={"decision": "approve", "reason": "evidence reviewed", "approver_id": "P01"})
+                 json={"decision": "approve", "reason": "evidence reviewed", "approver_id": approver})
     body = res.json()
-    check(res.status_code == 200 and body["status"] == "closed", "supervisor approved; case graph resumed and closed")
+    check(res.status_code == 200 and body["status"] == "closed",
+          f"supervisor ({approver}) approved; case graph resumed and closed"
+          + ("" if res.status_code == 200 and body.get("status") == "closed" else f" -> {res.status_code} {body}"))
     check(body["result"]["credit"]["amount_inr"] == 18450, f"shadow credit posted: {body['result']['credit']['credit_id']}")
     print("  SMS draft:", body["result"]["notification"]["body"])
     dup = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-                 json={"decision": "reject", "reason": "double click", "approver_id": "P01"})
+                 json={"decision": "reject", "reason": "double click", "approver_id": approver})
     check(dup.status_code == 409, "second decision rejected with 409, no side effect")
     trace = c.get(f"/cases/{case['case_id']}").json()["events"]
     check([e["node"] for e in trace][-3:] == ["approval_gate", "execute_action", "notify"], "case trace has every step")

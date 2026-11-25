@@ -512,7 +512,7 @@ def _script(state: ChatState) -> str | None:
         lines.append(f"I can see the duplicate ₹{d['amount_inr']:,} charge at {d['merchant']}.")
     elif d["kind"] == "fee_reversal":
         lines.append(f"I can see the ₹{d['amount_inr']:,} fee on your statement.")
-    lines.append("I've raised this with my supervisor for approval. You'll get an SMS confirming the outcome within 24 hours.")
+    lines.append("This needs my supervisor's approval, and I'm sending it to them now. You'll get an SMS confirming the outcome within 24 hours.")
     return " ".join(lines)
 
 

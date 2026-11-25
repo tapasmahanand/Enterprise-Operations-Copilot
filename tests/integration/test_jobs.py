@@ -112,3 +112,31 @@ def test_tat_sweep_marks_at_risk_and_breached_and_escalates_once(env):
     with connect() as conn:
         assert conn.execute("SELECT count(*) FROM escalations").fetchone()[0] == 1
         assert conn.execute("SELECT status FROM cases WHERE case_id='C-DONE'").fetchone()[0] == "closed"
+
+
+def test_stale_worker_cannot_touch_a_reclaimed_job(env):
+    """Worker A overruns its lease, B re-claims; A's late progress/complete/fail are no-ops."""
+    from kestrel.db import connect
+    from kestrel.jobs import queue
+    queue.enqueue("tat_sweep", {})
+    a = queue.claim("A")
+    with connect() as conn:   # A's lease expires
+        conn.execute("UPDATE jobs SET locked_at = now() - interval '1 hour' WHERE job_id = %s", (a["job_id"],))
+        conn.commit()
+    b = queue.claim("B")
+    assert b["job_id"] == a["job_id"] and b["attempts"] == a["attempts"] + 1
+    assert queue.progress(a, {"x": 1}) is False
+    assert queue.fail(a, "late error") == "stale"
+    assert queue.complete(a, {"by": "A"}) is False
+    assert queue.get_job(a["job_id"])["state"] == "running"
+    assert queue.complete(b, {"by": "B"}) is True
+    done = queue.get_job(b["job_id"])
+    assert done["state"] == "done" and done["result"] == {"by": "B"}
+    assert queue.fail(a, "even later") == "stale" and queue.get_job(a["job_id"])["state"] == "done"
+
+
+def test_scan_snippet_masks_labelled_account_numbers():
+    from kestrel.jobs.enron_scan import scan_message
+    flags = scan_message({"body": "Please wire it to account: 123456789 today.", "subject": "", "recipients": ""})
+    acct = [f for f in flags if f["rule_id"] == "CS-PII-ACCT"]
+    assert acct and "123456789" not in acct[0]["snippet"] and "XXXX6789" in acct[0]["snippet"]

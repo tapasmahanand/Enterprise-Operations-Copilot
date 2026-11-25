@@ -140,8 +140,11 @@ def stream(run_id: str) -> StreamingResponse:
             flush_traces()
             # Summary refresh is a background job, never on the hot path (design §5.1).
             from kestrel.jobs import queue
-            queue.enqueue("memory_summary", {"session_id": session_id}, requested_by="chat",
-                          dedupe_key=f"memory_summary:{session_id}")
+            try:
+                queue.enqueue("memory_summary", {"session_id": session_id}, requested_by="chat",
+                              dedupe_key=f"memory_summary:{session_id}")
+            except Exception:  # noqa: BLE001 - a failed summary refresh must not fail a completed run
+                log.exception("memory_summary enqueue failed for session %s", session_id)
             yield _sse({"type": "done", "run_id": run_id, "latency_ms": ms, "trace_url": trace_url(run_id)})
         except Exception as e:  # noqa: BLE001 - surface, don't hang the stream
             log.exception("run %s failed", run_id)

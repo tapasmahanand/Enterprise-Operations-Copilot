@@ -120,15 +120,21 @@ class SubmitCreditArgs(BaseModel):
 
 
 def _submit_credit(a: SubmitCreditArgs) -> dict:
-    """Idempotent by case_id: a resumed graph that re-runs this step gets the original credit back."""
+    """Idempotent by case_id: a resumed graph that re-runs this step gets the original credit back.
+    One credit per transaction (D38): if another case already credited this txn, fail explicitly."""
     with connect() as conn:
         conn.execute(
             """INSERT INTO mock_credits (credit_id, case_id, account_id, txn_id, kind, amount_inr, reason)
-               VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (case_id) DO NOTHING""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING""",
             (f"CR-{uuid.uuid4().hex[:10]}", a.case_id, a.account_id, a.txn_id, a.kind, a.amount_inr, a.reason))
         row = conn.execute("SELECT credit_id, amount_inr, kind, posted_at FROM mock_credits WHERE case_id = %s",
                            (a.case_id,)).fetchone()
+        other = None if row else conn.execute(
+            "SELECT credit_id, case_id FROM mock_credits WHERE txn_id = %s", (a.txn_id,)).fetchone()
         conn.commit()
+    if row is None:
+        raise ToolError(f"transaction {a.txn_id} was already credited ({other[0]}, case {other[1]})" if other
+                        else f"credit for {a.case_id} was not posted")
     return {"credit_id": row[0], "amount_inr": row[1], "kind": row[2], "posted_at": row[3].isoformat(timespec="seconds")}
 
 

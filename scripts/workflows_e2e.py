@@ -1,6 +1,7 @@
 """The brief's five workflows, end to end over HTTP against the running stack (real model).
 
     python scripts/workflows_e2e.py           # exit 0 only if every check passes
+    KESTREL_E2E_RESET='' python scripts/workflows_e2e.py   # skip the demo-data reset
 
 1 RAG              policy question → cited answer, no tools, no draft
 2 Tool-assisted    "charged twice" → lookup finds the duplicate pair → refund drafted
@@ -12,10 +13,18 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import time
 
 import httpx
+
+# One credit per transaction (D38): workflow 2 refunds T2002, so a rerun needs that credit gone.
+RESET = os.environ.get("KESTREL_E2E_RESET", "docker compose exec -T postgres psql -q -U kestrel -d kestrel "
+                       "-c \"DELETE FROM mock_credits WHERE txn_id = 'T2002'\"")
+if RESET:
+    subprocess.run(RESET, shell=True, check=True)
 
 c = httpx.Client(base_url="http://localhost:8000", timeout=90)
 results: list[tuple[str, bool, str]] = []
@@ -72,8 +81,9 @@ if approver != "P01":
     check("3 HITL: a team lead cannot approve above their tier", low.status_code == 403)
 ok = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
             json={"decision": "approve", "reason": "duplicate confirmed", "approver_id": approver})
-check("3 HITL: approve resumes the case", ok.status_code == 200 and ok.json()["status"] == "closed",
-      ok.json().get("result", {}).get("credit", {}).get("credit_id", ""))
+credit_id = ((ok.json().get("result") or {}).get("credit") or {}).get("credit_id") if ok.status_code == 200 else None
+check("3 HITL: approve resumes the case and posts the credit",
+      ok.status_code == 200 and ok.json()["status"] == "closed" and bool(credit_id), credit_id or "")
 dup = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
              json={"decision": "approve", "reason": "again", "approver_id": approver})
 check("3 HITL: duplicate decision is 409", dup.status_code == 409)
@@ -90,7 +100,7 @@ for _ in range(60):
         break
     time.sleep(1)
 check("4 Async: worker finished the scan", j["state"] == "done",
-      f"{j.get('result', {}).get('scanned')} scanned, {j.get('result', {}).get('flagged_messages')} flagged")
+      f"{(j.get('result') or {}).get('scanned')} scanned, {(j.get('result') or {}).get('flagged_messages')} flagged")
 bad = c.post("/jobs", headers={"X-Role": "agent"}, json={"job_type": "enron_compliance_scan"})
 check("4 Async: only compliance can start a scan", bad.status_code == 403)
 

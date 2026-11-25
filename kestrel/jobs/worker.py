@@ -28,8 +28,10 @@ def run_one(worker_id: str) -> bool:
     log.info("claimed %s (%s) attempt %d", jid, job["job_type"], job["attempts"])
     try:
         with root_span(jid, f"job {job['job_type']}", attempt=job["attempts"]):
-            result = HANDLERS[job["job_type"]](job["payload"], lambda p: queue.progress(jid, p))
-        queue.complete(jid, result)
+            result = HANDLERS[job["job_type"]](job["payload"], lambda p: queue.progress(job, p))
+        if not queue.complete(job, result):
+            log.warning("job %s attempt %d finished after its lease was taken over; result dropped",
+                        jid, job["attempts"])
         record_event(jid, jid, job["job_type"], "ok", int((time.perf_counter() - t0) * 1000),
                      {"attempt": job["attempts"], "summary": {k: v for k, v in result.items() if k != "sample"}})
     except Exception as e:  # noqa: BLE001 - a job failure must not kill the worker

@@ -24,19 +24,24 @@ def enqueue(job_type: str, payload: dict[str, Any] | None = None, *, requested_b
     """Returns the new job, or the live job with the same dedupe_key (no duplicate)."""
     if job_type not in JOB_TYPES:
         raise ValueError(f"unknown job type {job_type!r}")
-    job_id = f"JOB-{uuid.uuid4().hex[:10]}"
-    with connect() as conn:
-        try:
-            conn.execute(
-                """INSERT INTO jobs (job_id, job_type, payload, requested_by, dedupe_key, max_attempts)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
-                (job_id, job_type, Jsonb(payload or {}), requested_by, dedupe_key, max_attempts))
-            conn.commit()
-        except UniqueViolation:
-            conn.rollback()
-            job_id = conn.execute("SELECT job_id FROM jobs WHERE dedupe_key = %s AND state IN ('queued','running')",
-                                  (dedupe_key,)).fetchone()[0]
-    return get_job(job_id)
+    for _ in range(3):
+        job_id = f"JOB-{uuid.uuid4().hex[:10]}"
+        with connect() as conn:
+            try:
+                conn.execute(
+                    """INSERT INTO jobs (job_id, job_type, payload, requested_by, dedupe_key, max_attempts)
+                       VALUES (%s, %s, %s, %s, %s, %s)""",
+                    (job_id, job_type, Jsonb(payload or {}), requested_by, dedupe_key, max_attempts))
+                conn.commit()
+                return get_job(job_id)
+            except UniqueViolation:
+                conn.rollback()
+                live = conn.execute("SELECT job_id FROM jobs WHERE dedupe_key = %s AND state IN ('queued','running')",
+                                    (dedupe_key,)).fetchone()
+        if live:
+            return get_job(live[0])
+        # The conflicting job finished between our INSERT and SELECT: try the insert again.
+    raise RuntimeError(f"could not enqueue {job_type} with dedupe_key {dedupe_key!r}")
 
 
 def claim(worker_id: str) -> dict[str, Any] | None:
@@ -56,31 +61,41 @@ def claim(worker_id: str) -> dict[str, Any] | None:
             "worker_id": worker_id}
 
 
-def progress(job_id: str, data: dict[str, Any]) -> None:
+# Every write after claim is fenced on (state='running', attempts=<this claim's attempt>).
+# If this worker overran LEASE and another worker re-claimed the job, attempts moved on
+# and the stale worker's progress/complete/fail touch nothing (returns False / "stale").
+_FENCE = "job_id = %s AND state = 'running' AND attempts = %s"
+
+
+def progress(job: dict[str, Any], data: dict[str, Any]) -> bool:
     """Also renews the lease, so a long job isn't stolen while it is making progress."""
     with connect() as conn:
-        conn.execute("UPDATE jobs SET progress = %s, locked_at = now(), updated_at = now() WHERE job_id = %s",
-                     (Jsonb(data), job_id))
+        n = conn.execute(f"UPDATE jobs SET progress = %s, locked_at = now(), updated_at = now() WHERE {_FENCE}",
+                         (Jsonb(data), job["job_id"], job["attempts"])).rowcount
         conn.commit()
+    return n == 1
 
 
-def complete(job_id: str, result: dict[str, Any]) -> None:
+def complete(job: dict[str, Any], result: dict[str, Any]) -> bool:
     with connect() as conn:
-        conn.execute("UPDATE jobs SET state = 'done', result = %s, error = NULL, locked_at = NULL, updated_at = now() "
-                     "WHERE job_id = %s", (Jsonb(result), job_id))
+        n = conn.execute("UPDATE jobs SET state = 'done', result = %s, error = NULL, locked_at = NULL, updated_at = now() "
+                         f"WHERE {_FENCE}", (Jsonb(result), job["job_id"], job["attempts"])).rowcount
         conn.commit()
+    return n == 1
 
 
 def fail(job: dict[str, Any], error: str) -> str:
     """Retry with backoff (10 s, 40 s, …) or mark failed after max_attempts."""
     retry = job["attempts"] < job["max_attempts"]
     with connect() as conn:
-        conn.execute(
-            """UPDATE jobs SET state = %s, error = %s, locked_at = NULL, updated_at = now(),
-                      run_after = now() + %s WHERE job_id = %s""",
+        n = conn.execute(
+            f"""UPDATE jobs SET state = %s, error = %s, locked_at = NULL, updated_at = now(),
+                       run_after = now() + %s WHERE {_FENCE}""",
             ("queued" if retry else "failed", error[:2000], timedelta(seconds=10 * 4 ** (job["attempts"] - 1)),
-             job["job_id"]))
+             job["job_id"], job["attempts"])).rowcount
         conn.commit()
+    if n == 0:
+        return "stale"
     return "retrying" if retry else "failed"
 
 

@@ -43,8 +43,13 @@ def _external_confidential(msg: dict) -> bool:
     return "confidential" in text and any(not r.lower().endswith("@enron.com") for r in rcpts)
 
 
+_LABELLED_DIGITS = re.compile(r"(\b(?:account|acct|a/c|card)\s*(?:no\.?|number|#)?\s*:?\s*)\d*(\d{4})", re.I)
+
+
 def _mask(text: str) -> str:
-    return _US_PHONE.sub("XXX-XXX-XXXX", _SSN.sub("XXX-XX-XXXX", mask_pii(text).text))
+    text = _US_PHONE.sub("XXX-XXX-XXXX", _SSN.sub("XXX-XX-XXXX", mask_pii(text).text))
+    # CS-PII-ACCT matches 6+ digits after a label; mask_pii has no rule for short account numbers.
+    return _LABELLED_DIGITS.sub(lambda m: m.group(1) + "XXXX" + m.group(2), text)
 
 
 def scan_message(msg: dict) -> list[dict[str, str]]:
