@@ -194,15 +194,17 @@ def routing_sample(n_total: int, seed: int = 20261125) -> list[dict]:
 
 
 def run_routing(sample: list[dict], model: str) -> dict:
-    from kestrel.graphs.chat import SUPERVISOR_SYSTEM, _intent_list
+    from kestrel.graphs.chat import SUPERVISOR_SYSTEM, _intent_list, _kb_topics
     from kestrel.llm import SupervisorDecision, get_llm
-    system = SUPERVISOR_SYSTEM.format(intents=_intent_list())
+    system = SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics())
 
     def one(s):
         t0 = time.perf_counter()
         d, u = get_llm().structured(system, s["text"], SupervisorDecision, model=model)
         pred = d.intent
-        return {**s, "pred": pred, "pred_route": "refuse" if d.intent == "out_of_scope" else d.route,
+        if d.intent == "out_of_scope" and d.route == "rag":   # D48: a KB topic with no intent label
+            pred = "policy_question"
+        return {**s, "pred": pred, "pred_route": "refuse" if pred == "out_of_scope" else d.route,
                 "s": time.perf_counter() - t0, "cost_inr": u.cost_inr}
 
     with ThreadPoolExecutor(8) as ex:
