@@ -36,11 +36,61 @@ RULES: list[tuple[str, str, re.Pattern]] = [
 _DISCLAIMER = re.compile(r"intended recipient|in error|notify (?:us|the sender)|copies of (?:the|this)|anyone\.?\s+in such case", re.I)
 
 
+_ADDR = re.compile(r"[\w.+'-]+@([\w-]+(?:\.[\w-]+)+)")
+_CONF = re.compile(r"confidential|privileged", re.I)
+
+
+def _external_domains(msg: dict) -> list[str]:
+    # To and Cc are joined with a space and some lists are space-separated, so split on
+    # addresses, not commas (a comma split hid "x@caiso.com y@enron.com" as internal).
+    return [d.lower() for d in _ADDR.findall(msg.get("recipients") or "") if not d.lower().endswith("enron.com")]
+
+
 def _external_confidential(msg: dict) -> bool:
     # Subject or opening lines only: most bodies end in a "confidential" legal footer.
-    text = f"{msg.get('subject', '')} {(msg.get('body') or '')[:400]}".lower()
-    rcpts = [r.strip() for r in (msg.get("recipients") or "").split(",") if "@" in r]
-    return "confidential" in text and any(not r.lower().endswith("@enron.com") for r in rcpts)
+    # A marking inside a footer ("may contain confidential information...") doesn't count.
+    if not _external_domains(msg):
+        return False
+    if _CONF.search(msg.get("subject") or ""):
+        return True
+    head = (msg.get("body") or "")[:400]
+    return any(not _DISCLAIMER_OR_FOOTER.search(head[max(0, m.start() - 120):m.end() + 120]) for m in _CONF.finditer(head))
+
+
+_DISCLAIMER_OR_FOOTER = re.compile(r"intended recipient|in error|may contain|sole use|protected by the", re.I)
+
+_CARD_RUN = re.compile(r"(?<![\w/=.-])(?:\d[ -]?){12,18}\d(?![\w/.-])")
+_AADHAAR_RUN = re.compile(r"(?<![\w/=.-])[2-9]\d{3}[ -]?\d{4}[ -]?\d{4}(?![\w/.-])")
+_PAN_RUN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
+_VD = [[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],
+       [5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]]
+_VP = [[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],
+       [4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]]
+
+
+def _verhoeff(digits: str) -> bool:
+    c = 0
+    for i, ch in enumerate(reversed(digits)):
+        c = _VD[c][_VP[i % 8][int(ch)]]
+    return c == 0
+
+
+def _kb_ids(body: str) -> list[str]:
+    """Card (Luhn), Aadhaar (Verhoeff) and PAN numbers that pass their checksums and are not
+    part of a URL, id or MIME boundary. Stricter than chat masking on purpose: masking can
+    over-mask cheaply, but every scan flag costs a reviewer's time."""
+    from kestrel.guards.pii import _luhn
+    found = set()
+    for m in _CARD_RUN.finditer(body):
+        d = re.sub(r"\D", "", m.group(0))
+        if 13 <= len(d) <= 19 and _luhn(d):
+            found.add("card")
+    for m in _AADHAAR_RUN.finditer(body):
+        if _verhoeff(re.sub(r"\D", "", m.group(0))):
+            found.add("aadhaar")
+    if _PAN_RUN.search(body):
+        found.add("pan")
+    return sorted(found)
 
 
 _LABELLED_DIGITS = re.compile(r"(\b(?:account|acct|a/c|card)\s*(?:no\.?|number|#)?\s*:?\s*)\d*(\d{4})", re.I)
@@ -62,10 +112,9 @@ def scan_message(msg: dict) -> list[dict[str, str]]:
         if m:
             lo = max(0, m.start() - 60)
             flags.append({"rule_id": rule_id, "label": label, "snippet": _mask(body[lo:m.end() + 60])})
-    pii = mask_pii(body)
-    if {"card", "aadhaar", "pan"} & set(pii.found):
-        flags.append({"rule_id": "CS-PII-KB", "label": "card/Aadhaar/PAN pattern (KB-GUIDE-PII)",
-                      "snippet": ", ".join(sorted(pii.found))})
+    if kb := _kb_ids(body):
+        flags.append({"rule_id": "CS-PII-KB", "label": "card/Aadhaar/PAN number, checksum-valid (KB-GUIDE-PII)",
+                      "snippet": ", ".join(kb)})
     if _external_confidential(msg):
         flags.append({"rule_id": "CS-EXT-CONF", "label": "'confidential' content sent outside the firm", "snippet": ""})
     return flags
