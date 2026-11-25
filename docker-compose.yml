@@ -39,6 +39,8 @@ x-app-env: &app-env
   LANGFUSE_PUBLIC_URL: http://localhost:3000
   LANGFUSE_PUBLIC_KEY: pk-lf-kestrel-demo
   LANGFUSE_SECRET_KEY: sk-lf-kestrel-demo
+  # Shell value, else .env, else production (D49). `make up-demo` sets demo.
+  MODEL_PROFILE: ${MODEL_PROFILE:-production}
 
 services:
   postgres:

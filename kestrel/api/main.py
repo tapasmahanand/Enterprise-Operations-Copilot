@@ -76,6 +76,9 @@ def health() -> JSONResponse:
         checks["database"] = f"error: {type(e).__name__}"
         kb_ready = False
     checks["model_key"] = "configured" if s.openai_api_key else "missing"
+    from kestrel.llm import model_for, model_profile
+    checks["models"] = {"profile": model_profile(), "supervisor": model_for("supervisor"),
+                        "composer": model_for("composer")}
     checks["embedding_provider"] = s.embedding_provider
     ready = checks["database"] == "ok" and kb_ready
     return JSONResponse({"status": "ready" if ready else "not_ready", "checks": checks}, status_code=200 if ready else 503)

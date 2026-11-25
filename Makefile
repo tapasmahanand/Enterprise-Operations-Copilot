@@ -1,5 +1,5 @@
 # Kestrel Resolution Copilot: common tasks. Needs Docker; eval needs OPENAI_API_KEY in .env.
-.PHONY: up down test test-db eval eval-quick compliance-eval retrieval-ablation demo workflows
+.PHONY: up down test test-db eval eval-quick compliance-eval retrieval-ablation up-demo demo workflows
 
 up:            ## build and start everything (postgres, ingest, app, worker, Langfuse)
 	docker compose up --build -d --wait app
@@ -24,6 +24,9 @@ compliance-eval:  ## compliance-scan precision/recall on the labelled sample (no
 
 retrieval-ablation:
 	python -m evals.retrieval_ablation
+
+up-demo:       ## start the stack on the demo model profile (gpt-5.4; ~3.4x cost per answer)
+	MODEL_PROFILE=demo docker compose up --build -d --wait
 
 demo:          ## scripted hero demo with a hard app restart mid-approval
 	python scripts/hero_demo.py --restart "docker compose kill app && docker compose up -d --wait app"
