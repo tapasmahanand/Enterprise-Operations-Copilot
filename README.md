@@ -25,7 +25,7 @@ Or scripted, with a hard kill of the app between submit and approval:
 python scripts/hero_demo.py --restart "docker compose kill app && docker compose up -d app"
 ```
 
-Every request carries the caller's identity-verification level (`idv_level`, KB-SOP-IDV); the console defaults to level 2.
+Every request carries the caller's identity-verification level (`idv_level`, KB-SOP-IDV). The console starts every call at **level 0 (not verified)**; at level 0 the copilot answers policy questions but will not block a card or draft a credit. Set level 2 before running the hero demo. The level is recorded in the trace and on the draft, and enforced in code (card block ≥ 1; any credit, refund or fee reversal ≥ 2 plus complete KYC).
 
 All five workflows from the brief, against the running stack:
 

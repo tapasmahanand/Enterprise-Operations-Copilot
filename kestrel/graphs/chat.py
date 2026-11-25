@@ -121,7 +121,8 @@ def compliance_in(state: ChatState) -> dict:
         verdict = "redact" if pii["found"] else "allow"
     out["_trace"] = {"status": "blocked" if verdict == "block" else "ok",
                      "detail": {"verdict": verdict, "pii_found": pii["found"], "injection": hits,
-                                "score": score, "judge": judge}, **out.pop("_judge_usage", {})}
+                                "score": score, "judge": judge, "idv_level": state.get("idv_level", 0)},
+                     **out.pop("_judge_usage", {})}
     return out
 
 
@@ -404,6 +405,7 @@ def draft_action(state: ChatState) -> dict:
                "account_id": txn["account_id"], "txn_id": txn["txn_id"], "card_last4": txn.get("card_last4"),
                "merchant": txn.get("merchant"), "approver_role": req.approver_role, "risk_level": sup["risk_level"],
                "intent": intent, "due_by": calc.get("shadow_credit_due") if calc else None,
+               "idv_level": state.get("idv_level", 0),  # audit: what verification the agent recorded
                "repeat_dispute": bool(state.get("repeat_dispute")), "duplicate_of": state.get("duplicate_of"),
                "approval_reasons": req.reasons, "reason": f"{intent}: {txn['txn_id']} ₹{amount:,}"}
     evidence = [{"chunk_id": h["chunk_id"], "title": h["title"], "score": h["score"]} for h in state.get("hits", [])]

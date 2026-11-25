@@ -51,10 +51,12 @@
           <textarea id="msg">Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, it went through yesterday.</textarea>
           <div class="row" style="margin-top:8px">
             <button class="primary" id="send">Ask copilot</button>
-            <label class="muted">Caller verified
-              <select id="idv"><option value="0">not yet</option><option value="1">level 1 (mobile + DOB)</option><option value="2" selected>level 2 (+ OTP)</option><option value="3">level 3 (video KYC)</option></select></label>
+            <label class="muted">Caller identity verified (KB-SOP-IDV)
+              <select id="idv"><option value="0" selected>level 0 · not verified</option><option value="1">level 1 · mobile + DOB</option><option value="2">level 2 · + OTP</option><option value="3">level 3 · video KYC</option></select></label>
+            <button class="ghost" id="newcall" title="Start a new call: new session, verification back to level 0">New call</button>
             <span class="muted">Session <span class="mono" id="sid">new</span></span>
           </div>
+          <div id="idv-note" class="muted" style="margin-top:6px"></div>
         </div>
         <div class="card"><h2>Answer for you</h2><div class="answer" id="answer"><span class="muted">—</span></div>
           <div class="muted" id="cites" style="margin-top:8px"></div></div>
@@ -106,6 +108,21 @@ fetch("/health").then(r => r.json()).then(h => {
   $("health").textContent = `${h.status} · ${kb.documents ?? 0} docs · ${kb.embedding_model ?? "?"}`;
 });
 
+// Every call starts unverified. The level is recorded on each run and draft, and the
+// server enforces it (card block needs 1, any credit/refund needs 2 + complete KYC).
+const IDV_NOTE = {
+  0: '<span class="pill bad">not verified</span> The copilot will answer policy questions but will not block a card or draft any credit until you verify the caller.',
+  1: '<span class="pill warn">level 1</span> Card block allowed. Credits, refunds and fee reversals need level 2 (OTP).',
+  2: '<span class="pill ok">level 2</span> Credits can be drafted; every one still needs supervisor approval.',
+  3: '<span class="pill ok">level 3</span> Contact-detail changes allowed (video KYC / branch).'};
+const showIdv = () => { $("idv-note").innerHTML = IDV_NOTE[$("idv").value]; };
+$("idv").onchange = showIdv; showIdv();
+$("newcall").onclick = () => {
+  session = null; $("sid").textContent = "new"; $("idv").value = "0"; showIdv();
+  $("answer").innerHTML = '<span class="muted">—</span>'; $("progress").innerHTML = ""; $("cites").textContent = ""; $("trace").textContent = "";
+  ["script-card","draft-card","facts-card"].forEach(i => $(i).classList.add("hidden"));
+};
+
 $("send").onclick = async () => {
   $("send").disabled = true; $("answer").textContent = ""; $("progress").innerHTML = ""; $("cites").textContent = "";
   ["script-card","draft-card","facts-card"].forEach(i => $(i).classList.add("hidden")); $("case").textContent = ""; $("lat").textContent = "";
@@ -141,6 +158,8 @@ function showFinal(d) {
   if (d.output_check.verdict === "block") $("cites").innerHTML += ` <span class="pill bad">output check: ${esc(d.output_check.violations.join("; "))}</span>`;
   if (d.script) { $("script-card").classList.remove("hidden"); $("script").textContent = d.script; }
   const f = [];
+  if (d.card_block && d.card_block.error) f.push(`<div><span class="pill bad">card not blocked</span> <span class="muted">${esc(d.card_block.error)}</span></div>`);
+  if (d.refusal) f.push(`<div style="margin-top:6px"><span class="pill bad">${esc(d.refusal.rule_id)}</span> <span class="muted">${esc(d.refusal.reason)}</span></div>`);
   if (d.card_block && d.card_block.status) f.push(`<div><span class="pill ok">card ${esc(d.card_block.last4)} blocked</span> <span class="muted">${esc(d.card_block.blocked_at || "")}</span></div>`);
   if (d.calc) f.push(`<div style="margin-top:6px">Customer liability <b>${inr(d.calc.customer_liability_inr)}</b> · bank ${inr(d.calc.bank_liability_inr)}</div>
       <div>Shadow credit due <b>${esc(d.calc.shadow_credit_due)}</b> · resolve by ${esc(d.calc.resolution_due)}</div>
