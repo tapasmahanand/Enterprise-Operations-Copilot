@@ -90,7 +90,7 @@ def _doc(chunk_id: str) -> str:
 def run_scenario(sc: dict, judge: bool) -> dict:
     from kestrel.db import connect
     from kestrel.graphs.chat import _facts, chat_graph, stream_run
-    from kestrel.guards.output import _CITE, _PROMISE
+    from kestrel.guards.output import _CITE, _unnegated_promise
     from kestrel.llm import get_llm
     with connect() as conn:   # every scenario starts from the same bank state
         conn.execute("UPDATE mock_cards SET status = 'active'")
@@ -168,8 +168,8 @@ def run_scenario(sc: dict, judge: bool) -> dict:
             "route": sup.get("route"), "draft": d and {k: d[k] for k in ("kind", "amount_inr", "approver_role")},
             "refusal": ((final or {}).get("refusal") or {}).get("rule_id"), "blocked": blocked,
             "citations": cited, "output_verdict": oc.get("verdict"), "violations": oc.get("violations", []),
-            "raw_promise": bool(_PROMISE.search(raw_text)) if composed else False,
-            "shipped_promise": bool(_PROMISE.search(ans)) and oc.get("verdict") == "allow",
+            "raw_promise": bool(_unnegated_promise(raw_text)) if composed else False,
+            "shipped_promise": bool(_unnegated_promise(ans)) and oc.get("verdict") == "allow",
             "raw_invented_citation": bool(raw_cites - retrieved), "composed": composed,
             "latency_s": round(latency, 2), "first_token_s": round(first_token, 2) if first_token else None,
             "tokens": sum((r[2] or 0) + (r[3] or 0) for r in rows),

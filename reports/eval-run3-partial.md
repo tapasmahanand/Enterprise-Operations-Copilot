@@ -1,5 +1,7 @@
 # Evaluation run 3 (incomplete)
 
+> **Superseded by run 4** (`reports/eval.md`, complete, run after the account was topped up). Kept for the record.
+
 Run on 2026-11-25 with the code at this commit: the run 2 fixes, the in-scope-fraud refusal
 override and 8 held-out scenarios (H01–H08) written after run 2 and never tuned on.
 
