@@ -51,32 +51,41 @@ Offline / no key: set `EMBEDDING_PROVIDER=fake` in `.env` (lexical test embeddin
 
 ## Results (Milestone 4)
 
-Full numbers: [reports/eval.md](reports/eval.md) (run 2, last complete run) and
-[reports/eval-run3-partial.md](reports/eval-run3-partial.md) (run 3: the production half
-finished; the gpt-5.4 half stopped when the API account ran out of credits). Run it yourself
-with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD assumed).
+Full numbers: [reports/eval.md](reports/eval.md) (run 4, 25 tuned scenarios plus 8
+held-out, each 3 times per model). Run it yourself with `make eval` (about 30 min, roughly ₹230
+at list prices, ₹88/USD assumed). Earlier runs are kept in `reports/eval-run*.md`.
 
-**Model comparison** (Supervisor + Composer; 25 scenarios × 3 repeats, run 2):
+**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 4):
 
 | | gpt-5.4-mini (production) | gpt-5.4 |
 |---|---|---|
-| Scenario runs passing | 67/75 (89%) | 69/75 (92%) |
-| Groundedness: supported claims (LLM judge) | 89% | 92% |
-| Latency p50 / p95 | 4.1 s / 4.8 s | 5.3 s / 6.1 s |
-| Cost per copilot answer | ₹0.23 | ₹0.76 |
-| BANKING77 intent accuracy (n=200) | 78% | 78% |
-| Out-of-scope correctly refused | 77% | 68% |
+| Scenario runs passing | 86/99 (87%) | 90/99 (91%) |
+| Held-out scenarios passing all repeats | **7/8** | **6/8** |
+| Outcome correct (draft / no draft / amount / tier) | 97% | 94% |
+| Intent label correct | 92% | 100% |
+| Groundedness: supported claims (LLM judge) | 91% | 91% |
+| Answers with zero unsupported claims | 48% | 37% |
+| BANKING77 intent accuracy (n=200) | 77% | 80% |
+| Out-of-scope correctly refused | 80% | 70% |
+| Latency p50 / p95 | 3.8 s / 4.4 s | 5.3 s / 6.2 s |
+| Cost per copilot answer | ₹0.23 | ₹0.77 |
 
-The bigger model is about 3× the cost for a 3-point gain that is inside run-to-run noise
-(routing moves ±3 points between identical runs), so production stays on mini.
-**Held-out scenarios** (written after run 2, never tuned on): 6/8 pass all repeats on mini
-(run 3), against 21/25 on the tuned set.
+Production stays on mini. gpt-5.4 gets intent labels right more often, but that does not turn
+into better outcomes: it drafts the right action *less* often (94% vs 97%), does worse on the
+held-out set, and refused an in-scope duplicate-charge refund in all three repeats (H07), for
+3.4× the cost and 1.5 s more latency. Its 4-point pass-rate lead is about the size of the
+run-to-run noise we measured (±3 points). Treat both models as roughly equal on this suite.
 
-**Ops and compliance** (production config): 0 unapproved promises reached the agent or were
-even attempted in the raw stream; 0 invented citations; 100% of drafted actions carry a
-complete audit trail; the TAT sweeper caught 6/6 breaches in a 60-case simulation, warning
-a median 2 days ahead. The 10% deadline-breach rate depends on an **assumed** approval delay;
-it measures staffing, not the software.
+**Ops and compliance** (production config): 0 unapproved promises reached the agent; 0 invented
+citations; 100% of 21 drafted actions carry a complete audit trail; the TAT sweeper caught 6/6
+breaches in a 60-case simulation, warning a median 2 days ahead. The 10% deadline-breach rate
+depends on an **assumed** approval delay; it measures staffing, not the software.
+
+The report says the model "attempted" 3 promises and 4% of answers were withheld. **Those were
+guard false positives**, not promises: all three were H07 answers telling the agent *not* to
+guarantee the refund ("do not guarantee the refund", "you can't guarantee the refund today"),
+confirmed by re-running H07 and reading the raw text. The promise check now ignores negated
+phrases (D47, with tests). Not re-run after the fix, so the report keeps the measured numbers.
 
 **Compliance scan accuracy** (226 hand-labelled Enron emails, stratified, population-weighted;
 [evals/compliance/README.md](evals/compliance/README.md)): precision **71%** (95% CI 38–89%),
@@ -89,10 +98,13 @@ superseded policy version ranks in the top 3 for 8/8 version-sensitive queries; 
 Hybrid search adds one query at rank 1 (MRR 0.90 → 0.92), not enough to justify a second index
 yet (D45).
 
-**Known weak spots:** (1) the mini model sometimes refuses in-scope questions as out of scope,
-and the same note flips between runs (S15, H05); (2) fee-reversal drafting depends on the LLM's
-route choice (S08b fails on both models); (3) gpt-5.4-nano, used for query rewrite and the
-borderline prompt-injection judge, is deprecated and needs replacing.
+**Known weak spots:** (1) both models sometimes refuse in-scope requests as out of scope (S15
+and H05 on mini, H05 and H07 on gpt-5.4), and the same note flips between runs with no code
+change; refusal should become code's call for catalogued intents, as it already is for fraud;
+(2) fee-reversal drafting depends on the LLM's route choice (S08b fails on both models);
+(3) mini's intent label flips on some notes (wrong in all 3 runs of S09 and 2 of 3 of S24) even where code still produces
+the right outcome; (4) gpt-5.4-nano, used for query rewrite and the borderline prompt-injection
+judge, is deprecated and needs replacing.
 
 **Screenshots** ([docs/screenshots](docs/screenshots)): a fresh console starts at level 0 and
 will neither look up the account nor block the card (01, 02); at level 2 the hero case drafts

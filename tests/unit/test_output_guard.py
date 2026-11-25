@@ -32,3 +32,21 @@ def test_rule_and_case_ids_are_not_treated_as_numbers():
 def test_unmasked_card_blocked():
     r = check_output("Card 4111 1111 1111 1111 is blocked.", R, approval_exists=False)
     assert r["verdict"] == "block"
+
+
+def test_telling_the_agent_not_to_guarantee_is_not_a_promise():
+    # Real Composer sentences from eval run 4 (H07) that the old regex withheld.
+    for ok in ["Confirm the duplicate is being raised for supervisor approval; do not guarantee the refund.",
+               "Explain that it needs supervisor approval and you can’t guarantee the refund today.",
+               "Never promise or guarantee a timeline.",
+               "There is no guarantee of a credit before approval."]:
+        assert check_output(ok, R, approval_exists=False)["verdict"] == "allow", ok
+
+
+def test_real_promises_still_blocked_even_after_an_earlier_negation():
+    for bad in ["We guarantee the refund today.",
+                "Do not worry. We guarantee the refund today.",
+                "This is not a fee; you will definitely get your money back.",
+                "No problem, the refund is approved.",
+                "No doubt the refund is approved."]:
+        assert check_output(bad, R, approval_exists=False)["verdict"] == "block", bad
