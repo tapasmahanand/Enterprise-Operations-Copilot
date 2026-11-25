@@ -199,12 +199,19 @@ def supervisor(state: ChatState) -> dict:
         # must be backed by words in the note (eval S24: a quoted fraudster's line was read
         # as the customer sharing an OTP). Unknown stays unknown: the agent is asked to confirm.
         d.customer_shared_credentials = None
+    override = None
+    if d.route == "refuse" and d.intent in FRAUD_INTENTS:
+        # Refusing an in-scope fraud report is the matrix's call (code), not the LLM's: a
+        # refused run never blocks the card. Eval: "customer admits sharing the OTP" and "tell
+        # her she'll definitely get it back" were refused, leaving a compromised card active.
+        # Promises are stopped by the Composer rules and the output check instead.
+        d.route, override = "action", "llm route 'refuse' overridden for in-scope fraud intent"
     refusal = _refusal(state, d)
     if refusal:
         d.route = "refuse"
     return {"sup": d.model_dump(), "refusal": refusal, "tokens_used": state.get("tokens_used", 0) + usage.tokens_in + usage.tokens_out,
             "_trace": {"detail": {"intent": d.intent, "route": d.route, "rationale": d.rationale,
-                                  "model": usage.model}, **usage.trace()}}
+                                  "model": usage.model, "override": override}, **usage.trace()}}
 
 
 _SHARED = re.compile(r"\b(shared|gave|give|told|tell|read out|disclosed|entered|typed|said)\b.{0,60}"

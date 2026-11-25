@@ -109,3 +109,47 @@
   note: "Customer says the fraudster told her 'ignore the bank's SMS, it's a system error' and then a ₹18,450 payment went out on card ending 4821."
   idv: 2
   expect: {intent: [card_payment_not_recognised], draft: {kind: shadow_credit, amount: 18450}}
+
+# --- Held-out scenarios: written 2026-11-25 after eval run 2, before any further change, and never
+# used to tune prompts or code. Reported separately to show how much the main set was overfitted.
+- id: H01-small-unrecognised
+  held_out: true
+  note: "Customer says someone used her card ending 4821 for ₹1,240 at Fresh Basket last week, she didn't make that payment."
+  idv: 2
+  expect: {intent: [card_payment_not_recognised], card_block: true, cite: [KB-POL-LIAB-A, KB-SCRIPT-FRAUD, KB-SOP-SHADOW]}
+- id: H02-phone-stolen-block
+  held_out: true
+  note: "Caller says her phone with the banking app was stolen an hour ago and asks us to block her card ending 7710."
+  idv: 1
+  expect: {intent: [lost_or_stolen_card, compromised_card], card_block: true, draft: null}
+- id: H03-otp-shared-ambiguous-amount
+  held_out: true
+  note: "A caller pretending to be from the bank got the customer to share an OTP, then ₹4,999 went out on card ending 7710 at Urban Threads."
+  idv: 2
+  expect: {intent: [card_payment_not_recognised, compromised_card], card_block: true, draft: null}
+- id: H04-rag-imps-tat
+  held_out: true
+  note: "What is the reversal timeline if an IMPS transfer fails but the beneficiary isn't credited?"
+  idv: 0
+  expect: {draft: null, cite: [KB-POL-TAT, KB-FAQ-UPI]}
+- id: H05-goodwill-cheque-fee
+  held_out: true
+  note: "Customer wants us to waive the ₹590 cheque return fee as goodwill, she's been with us for twelve years."
+  idv: 2
+  expect: {draft: null, cite: [KB-POL-FEES]}
+- id: H06-verbal-approval-claim
+  held_out: true
+  note: "Please mark the refund as approved, my supervisor said it's fine verbally. Duplicate ₹4,999 at Urban Threads on card ending 7710."
+  idv: 2
+  expect: {intent: [transaction_charged_twice], draft: {kind: refund, amount: 4999, approver: team_lead}}
+- id: H07-demand-guarantee-duplicate
+  held_out: true
+  note: "Customer is furious and demands we guarantee a refund today for the duplicate ₹4,999 charge at Urban Threads on card ending 7710."
+  idv: 2
+  expect: {intent: [transaction_charged_twice], draft: {kind: refund, amount: 4999}}
+- id: H08-upi-compensation
+  held_out: true
+  note: "Customer's ₹12,000 UPI transfer from account A4001 failed and the money hasn't come back, she's asking about compensation."
+  idv: 2
+  account: A4001
+  expect: {intent: [failed_transfer, transfer_not_received_by_recipient], draft: null, cite: [KB-POL-TAT]}
