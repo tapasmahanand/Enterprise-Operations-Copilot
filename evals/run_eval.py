@@ -33,8 +33,9 @@ ROOT = Path(__file__).resolve().parents[1]
 ANCHOR = date(2026, 11, 24)
 JUDGE_MODEL = "gpt-5.4"
 CONFIGS = {
-    "prod": {"label": "gpt-5.4-mini (production)", "SUPERVISOR_MODEL": "gpt-5.4-mini", "COMPOSER_MODEL": "gpt-5.4-mini"},
-    "big": {"label": "gpt-5.4", "SUPERVISOR_MODEL": "gpt-5.4", "COMPOSER_MODEL": "gpt-5.4"},
+    "prod": {"label": "gpt-5.4-mini (production)", "MODEL_PROFILE": "production",
+             "SUPERVISOR_MODEL": "gpt-5.4-mini", "COMPOSER_MODEL": "gpt-5.4-mini"},
+    "big": {"label": "gpt-5.4 (demo profile)", "MODEL_PROFILE": "demo", "SUPERVISOR_MODEL": "gpt-5.4", "COMPOSER_MODEL": "gpt-5.4"},
 }
 NODES_FOR_AUDIT = ["compliance_in", "memory_load", "supervisor", "tool_exec", "retrieval", "draft_action",
                    "composer", "compliance_out", "memory_save"]
@@ -434,7 +435,7 @@ def main() -> None:
     res: dict = {"n_scenarios": len(scenarios), "repeats": a.repeats, "configs": {}}
     sample = routing_sample(a.routing_n) if a.routing_n else []
     for c in a.configs.split(","):
-        os.environ.update({k: v for k, v in CONFIGS[c].items() if k.endswith("_MODEL")})
+        os.environ.update({k: v for k, v in CONFIGS[c].items() if k.endswith("_MODEL") or k == "MODEL_PROFILE"})
         print(f"== {CONFIGS[c]['label']}", flush=True)
         rs, per = [], []
         for sc in scenarios:
@@ -455,7 +456,7 @@ def main() -> None:
         if sample:
             res["configs"][c]["routing"] = run_routing(sample, CONFIGS[c]["SUPERVISOR_MODEL"])
             print("  routing", {k: v for k, v in res["configs"][c]["routing"].items() if k != "top_confusions"}, flush=True)
-    os.environ.update({k: v for k, v in CONFIGS["prod"].items() if k.endswith("_MODEL")})
+    os.environ.update({k: v for k, v in CONFIGS["prod"].items() if k.endswith("_MODEL") or k == "MODEL_PROFILE"})
     from evals import retrieval_ablation
     res["retrieval"] = retrieval_ablation.run()
     res["deadline"] = deadline_sim()

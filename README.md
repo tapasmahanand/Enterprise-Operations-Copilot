@@ -15,6 +15,11 @@ curl localhost:8000/health    # {"status": "ready", ...}
 ```
 
 - Agent console and supervisor queue: http://localhost:8000
+- **Models: demo vs production.** `MODEL_PROFILE=production` (the default) runs the Supervisor and
+  Composer on gpt-5.4-mini, about ₹0.27 per copilot answer. **Demos and interviews use
+  `make up-demo`** (`MODEL_PROFILE=demo`): gpt-5.4, about ₹0.91 per answer (3.4×) and ~1.6 s slower,
+  in exchange for fewer wrong refusals (see "Refusals" below). `/health` shows the active profile and
+  models. Costs are from the latest scenario eval at list prices and an assumed ₹88/USD (D49).
 - Traces: http://localhost:3000 (Langfuse; log in as `demo@kestrel.example` / `kestrel-demo`). Every step is also in the `run_events` table and shown in the console's Trace panel, so the demo never depends on Langfuse.
 
 ## Hero demo (unauthorised ₹18,450 card payment)
@@ -98,13 +103,29 @@ superseded policy version ranks in the top 3 for 8/8 version-sensitive queries; 
 Hybrid search adds one query at rank 1 (MRR 0.90 → 0.92), not enough to justify a second index
 yet (D45).
 
-**Known weak spots:** (1) both models sometimes refuse in-scope requests as out of scope (S15
-and H05 on mini, H05 and H07 on gpt-5.4), and the same note flips between runs with no code
-change; refusal should become code's call for catalogued intents, as it already is for fraud;
-(2) fee-reversal drafting depends on the LLM's route choice (S08b fails on both models);
-(3) mini's intent label flips on some notes (wrong in all 3 runs of S09 and 2 of 3 of S24) even where code still produces
-the right outcome; (4) gpt-5.4-nano, used for query rewrite and the borderline prompt-injection
-judge, is deprecated and needs replacing.
+**Refusals (D48, [reports/scope-eval.md](reports/scope-eval.md)).** On a scope test set written
+before the fix, `main` wrongly refused 38% of valid desk requests on mini and 10% on gpt-5.4. The LLM
+now can't refuse a catalogued request unless it names an unsafe one (skipping identity checks,
+changing contact details, unmasking data, instructing the copilot); the desk's scope is defined by
+its knowledge-base topics; and a topic refusal is re-checked against the KB before it stands. After:
+**5% on mini, 0% on gpt-5.4.** The price: about 1 in 10 out-of-scope or adversarial requests (e.g. "is
+the Vashi branch open on Sunday?", "reverse the ₹23 ATM fee, no OTP possible") is now answered from
+documents instead of refused. None produced a draft; the identity gates hold. On the BANKING77 routing
+sample (Supervisor only, no KB re-check), out-of-scope queries correctly refused fell from 80% to 71%
+on mini, so real customer phrasing still leaks more than the hand-written set shows.
+Scenario eval after the fix ([reports/eval-scopefix.md](reports/eval-scopefix.md), no judge, demo
+profile with the re-check *off*): mini 91/99 runs pass (was 86/99), gpt-5.4 94/99 (was 90/99). Cost
+of the fix: the KB topic list makes the Supervisor prompt ~600 tokens longer, so a mini answer costs
+₹0.27 instead of ₹0.23 (+19%), and p50 latency rose from 3.8 s to 4.5 s on mini (5.3 s to 6.1 s on
+gpt-5.4). Part of that may be API variance; it was not separated out.
+
+**Known weak spots:** (1) a few valid desk questions are still refused on mini (escalation, "may I
+paste a card number / Aadhaar into the copilot?"), and gpt-5.4 without the re-check refused H05 in 2
+of 3 runs; (2) fee-reversal drafting depends on the LLM's route choice (S08b fails on both models);
+(3) mini's intent label flips on some notes (S09) even where code still produces the right outcome;
+(4) gpt-5.4-nano, used for query rewrite and the borderline prompt-injection judge, is deprecated
+and needs replacing; (5) the final demo configuration's scope numbers come from the attempt-3 run,
+because a confirmation run hit the API credit limit.
 
 **Screenshots** ([docs/screenshots](docs/screenshots)): a fresh console starts at level 0 and
 will neither look up the account nor block the card (01, 02); at level 2 the hero case drafts

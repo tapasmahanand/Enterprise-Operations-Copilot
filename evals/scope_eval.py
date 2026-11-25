@@ -75,7 +75,7 @@ def rates(runs: list[dict], split: str) -> dict:
     return out
 
 
-def run(tag: str, splits: list[str]) -> Path:
+def run(tag: str, splits: list[str], configs: list[str] | None = None) -> Path:
     setup_db()
     from kestrel.checkpoint import get_checkpointer
     import kestrel.graphs.chat as chat
@@ -83,7 +83,9 @@ def run(tag: str, splits: list[str]) -> Path:
     items = [i for i in yaml.safe_load((ROOT / "evals" / "scope_set.yaml").read_text())["items"] if i["split"] in splits]
     res: dict = {"tag": tag, "configs": {}}
     for c, reps in PLAN.items():
-        os.environ.update({k: v for k, v in CONFIGS[c].items() if k.endswith("_MODEL")})
+        if configs and c not in configs:
+            continue
+        os.environ.update({k: v for k, v in CONFIGS[c].items() if k.endswith("_MODEL") or k == "MODEL_PROFILE"})
         runs = []
         for i in range(reps):
             for it in items:
@@ -92,7 +94,7 @@ def run(tag: str, splits: list[str]) -> Path:
                       f"refusal={r['code_refusal']} draft={r['draft']} top={r['top_score']}", flush=True)
                 runs.append(r)
         res["configs"][c] = {"runs": runs, **{sp: rates(runs, sp) for sp in splits}}
-    os.environ.update({k: v for k, v in CONFIGS["prod"].items() if k.endswith("_MODEL")})
+    os.environ.update({k: v for k, v in CONFIGS["prod"].items() if k.endswith("_MODEL") or k == "MODEL_PROFILE"})
     out = ROOT / "reports" / f"scope-eval-{tag}.json"
     out.write_text(json.dumps(res, indent=2, default=str), encoding="utf-8")
     return out
@@ -136,5 +138,6 @@ if __name__ == "__main__":
     ap.add_argument("--tag")
     ap.add_argument("--compare")
     ap.add_argument("--splits", default="dev,test,test2")
+    ap.add_argument("--configs", default="")
     a = ap.parse_args()
-    print(compare(a.compare.split(",")) if a.compare else run(a.tag, a.splits.split(",")))
+    print(compare(a.compare.split(",")) if a.compare else run(a.tag, a.splits.split(","), [c for c in a.configs.split(",") if c]))

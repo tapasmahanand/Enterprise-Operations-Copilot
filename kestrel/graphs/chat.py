@@ -39,7 +39,7 @@ from kestrel.guards.output import check_output
 from kestrel.guards.pii import mask_pii
 from kestrel.ingest.embed import make_embedder
 from kestrel.ingest.seed import anchor_date
-from kestrel.llm import InjectionVerdict, SupervisorDecision, Usage, get_llm, model_for
+from kestrel.llm import scope_kb_check, CoverageVerdict, InjectionVerdict, SupervisorDecision, Usage, get_llm, model_for
 from kestrel.retrieval.search import vector_search
 from kestrel.rules.approval import approval_requirement
 from kestrel.rules.calculator import failed_txn_compensation
@@ -209,8 +209,15 @@ def supervisor(state: ChatState) -> dict:
         (f"\n(Call summary so far: {state['summary']})" if state.get("summary") else "")
     d, usage = get_llm().structured(SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics()), user,
                                     SupervisorDecision, model=model_for("supervisor"))
+    scope_check = None
     if d.intent == "out_of_scope" and d.route != "rag":
         d.route = "refuse"
+        if d.refusal_reason != "unsafe_request" and scope_kb_check():
+            # A topic refusal is checked against the knowledge base before it stands (D48): the
+            # supervisor refused desk questions its documents answer (eval S15, H05; scope set).
+            scope_check = _scope_check(state)
+            if scope_check["covered"]:
+                d.intent, d.route, d.refusal_reason = "policy_question", "rag", None
     if not d.card_last4 and state["pii"]["card_last4"]:
         d.card_last4 = state["pii"]["card_last4"][-1]
     if state["pii"].get("secret_shared"):
@@ -227,8 +234,40 @@ def supervisor(state: ChatState) -> dict:
     return {"sup": d.model_dump(), "refusal": refusal, "tokens_used": state.get("tokens_used", 0) + usage.tokens_in + usage.tokens_out,
             "_trace": {"detail": {"intent": d.intent, "route": d.route, "rationale": d.rationale,
                                   "model": usage.model, "override": override,
-                                  "refusal_reason": d.refusal_reason},
+                                  "refusal_reason": d.refusal_reason, "scope_check": scope_check},
                        **usage.trace()}}
+
+
+# Closest-chunk cosine similarity below which a topic refusal is not even re-checked. Calibrated on
+# the dev split only (valid 0.457-0.716, out of scope 0.161-0.372). Similarity alone is not enough
+# (attempt 1 rescued "car loan processing fee" via the fee schedule), so a covered verdict also
+# needs an LLM to confirm the passage itself answers the question.
+SCOPE_MIN_SIMILARITY = 0.42
+
+COVERAGE_SYSTEM = ("You check whether a bank policy PASSAGE answers a call-centre agent's QUESTION. Say answers=true "
+                   "only if the passage itself states the rule, fee, step, contact or fact asked about, for the same "
+                   "product (a fee table for savings accounts does not answer a question about loan fees). Judge "
+                   "only from the passage.")
+
+
+def _scope_check(state: ChatState) -> dict:
+    """Is a topic refusal wrong because the KB answers the note? Never for a note with any
+    injection signal. One embedding call, plus one small LLM call when a chunk is close."""
+    inj, hits = injection_score(state["masked"])
+    if inj > 0 or hits:
+        return {"covered": False, "skipped": "injection signal"}
+    vec = make_embedder(get_settings()).embed([state["masked"]])[0]
+    with connect() as conn:
+        top = vector_search(conn, vec, k=2)
+    threshold = float(os.environ.get("SCOPE_MIN_SIMILARITY", SCOPE_MIN_SIMILARITY))
+    close = [h for h in top if h.score >= threshold]
+    out = {"covered": False, "similarity": round(top[0].score, 4) if top else 0.0, "threshold": threshold}
+    if not close:
+        return out
+    passage = "\n\n".join(f"[{h.document_id}] {h.title}\n{sanitize_document(h.text)[0]}" for h in close)
+    v, _ = get_llm().structured(COVERAGE_SYSTEM, f"QUESTION: {state['masked']}\n\nPASSAGE:\n{passage}",
+                                CoverageVerdict, model=model_for("supervisor"))
+    return out | {"covered": v.answers, "documents": [h.document_id for h in close], "reason": v.reason}
 
 
 def _refusal_policy(d: SupervisorDecision, idv: int) -> str | None:
@@ -249,7 +288,11 @@ def _refusal_policy(d: SupervisorDecision, idv: int) -> str | None:
 
 _SHARED = re.compile(r"\b(shared|gave|give|told|tell|read out|disclosed|entered|typed|said)\b.{0,60}"
                      r"\b(otp|pin|cvv|password|passcode|card (?:details|number)|one[- ]time)", re.I | re.S)
-_CONTACT_CHANGE = re.compile(r"\b(change|update|new)\b.{0,30}\b(mobile|phone|e-?mail|address|contact)\b", re.I)
+# Either order: "change her mobile" and "registered mobile changed to" (scope set u-a03 slipped past
+# the one-directional version; the LLM refused it, the code rule did not fire).
+_CONTACT_CHANGE = re.compile(r"\b(change[ds]?|changing|update[ds]?|updating|replace[ds]?|new)\b.{0,30}"
+                             r"\b(mobile|phone|e-?mail|address|contact)\b|\b(mobile|phone|e-?mail|address|contact)"
+                             r"(?: number)?\b.{0,20}\b(changed|updated|replaced)\b", re.I)
 
 
 def _refusal(state: ChatState, d: SupervisorDecision) -> dict[str, str] | None:
