@@ -22,9 +22,32 @@ curl localhost:8000/health    # {"status": "ready", ...}
   models. Costs are from the latest scenario eval at list prices and an assumed ₹88/USD (D49).
 - Traces: http://localhost:3000 (Langfuse; log in as `demo@kestrel.example` / `kestrel-demo`). Every step is also in the `run_events` table and shown in the console's Trace panel, so the demo never depends on Langfuse.
 
+## Sign-in and audit trail
+
+Every endpoint except `/health`, the page itself and `/auth/login` needs a session. Seeded demo users (password `kestrel-demo`, or whatever `KESTREL_DEMO_PASSWORD` was set to when the database was first seeded):
+
+| User | Role | Approves up to |
+|---|---|---|
+| `agent1`, `agent2` | agent | — |
+| `ananya` | supervisor (P01, team lead) | team-lead cases |
+| `farah` | supervisor (P03, ops manager) | ops-manager cases |
+| `rohan` | supervisor (P04, regional ops head) | everything |
+| `compliance1` | compliance | — (starts compliance scans, reads the audit log) |
+
+The approver on an approval is the signed-in supervisor; there is no way to name another one. Sign-ins, chats (with the IDV level the agent attested), submissions, approvals, denials and jobs go to an append-only `audit_log` (Audit tab, or `GET /audit`). Scripts sign in with `POST /auth/login` and send `Authorization: Bearer <token>`.
+
+### What is still unprotected (read before claiming "secure")
+
+- **IDV level is still the agent's word.** It is now attributed to a named agent and audited, but the server does not verify the caller (D51). A dishonest agent can still claim level 2.
+- **The audit log stops the app, not the DBA.** The append-only trigger can be dropped by the database owner, and the app connects as the owner. Production needs a separate INSERT-only role and off-box storage or a hash chain (D52).
+- **Demo credentials.** One shared password, no MFA, no password change or reset, users only from the seed. Login throttling is in memory per process (5 failures per 15 minutes) and resets on restart.
+- **No HTTPS here.** The cookie is `Secure` only with `COOKIE_SECURE=1`; on plain HTTP a network observer can steal a session. CSRF rests on `SameSite=Strict` plus JSON bodies; there is no CSRF token.
+- **Supervisors can read every case and run.** Agents are limited to their own; there is no per-team or per-branch scoping, and retrieval has no access control yet (no department filter is applied).
+- **Langfuse and Postgres have their own logins** (compose defaults), unrelated to this sign-in.
+
 ## Hero demo (unauthorised ₹18,450 card payment)
 
-In the UI: press **Ask copilot** (the sample text is pre-filled), then **Send to supervisor**, restart the app, switch to **Supervisor queue** and **Approve**.
+Sign in as `agent1`. In the UI: press **Ask copilot** (the sample text is pre-filled), then **Send to supervisor**, restart the app, sign in as `ananya` (or `farah` if the case needs an ops manager), open **Supervisor queue** and **Approve**.
 
 Or scripted, with a hard kill of the app between submit and approval:
 
@@ -130,7 +153,7 @@ because a confirmation run hit the API credit limit.
 **Screenshots** ([docs/screenshots](docs/screenshots)): a fresh console starts at level 0 and
 will neither look up the account nor block the card (01, 02); at level 2 the hero case drafts
 the ₹18,450 credit for team-lead approval (03), goes to the supervisor queue (04, 05) and is
-approved with the credit posted once (06).
+approved with the credit posted once (06). They were taken before sign-in was added (D50), so they show the old "Acting as" approver picker.
 
 **Demo video:** to be recorded by the project owner (not producible from this environment).
 

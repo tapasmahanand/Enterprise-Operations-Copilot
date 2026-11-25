@@ -185,7 +185,7 @@ Brief's five tables (`documents`, `document_chunks`, `sessions`, `cases`, `appro
 ### 5.6 API and UI
 
 - `POST /chat` (returns `thread_id`), `GET /stream/{thread_id}` (SSE: node-level progress events + token stream), `POST /drafts/{id}/submit` (agent's "Send to supervisor"; creates the case and starts its case graph), `GET /cases/{id}`, `GET /approvals?state=pending`, `POST /approvals/{id}` (`approve|reject`, reason), `POST /jobs`, `GET /jobs/{id}`, `GET /health` (DB + model reachability).
-- Role via header (`X-Role: agent|supervisor|compliance`) **[call]**.
+- ~~Role via header (`X-Role`)~~ Replaced 25 Nov (D50): sign-in with server-side sessions; role and approver identity come from the session, never the client. `POST /auth/login|logout`, `GET /auth/me`, `GET /audit`. Append-only `audit_log` (D52).
 - UI: one static HTML/JS page served by FastAPI with two tabs: **Agent console** (input, live progress, answer with citations, script line) and **Supervisor queue** (pending approvals, evidence, approve/reject) **[call]**. Minimal styling.
 
 ### 5.7 Async

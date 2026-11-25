@@ -16,6 +16,8 @@ import time
 
 import httpx
 
+from _login import APPROVER_FOR_TIER, as_user
+
 HERO = ("Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, "
         "it went through yesterday.")
 
@@ -52,10 +54,11 @@ def main() -> None:
         subprocess.run(a.reset, shell=True, check=True)
     c = httpx.Client(base_url=a.base, timeout=60)
     wait_healthy(a.base)
+    agent = as_user(c, "agent1")
 
-    run = c.post("/chat", json={"message": HERO, "idv_level": 2}, headers={"X-Role": "agent"}).json()
+    run = c.post("/chat", json={"message": HERO, "idv_level": 2}, headers=agent).json()
     events, t0, first = [], time.perf_counter(), None
-    with c.stream("GET", run["stream"]) as r:
+    with c.stream("GET", run["stream"], headers=agent) as r:
         for line in r.iter_lines():
             if line.startswith("data: "):
                 ev = json.loads(line[6:])
@@ -73,7 +76,7 @@ def main() -> None:
     check(final["output_check"]["verdict"] == "allow" and final["citations"], f"answer cites {final['citations']}")
     print("  script:", final["script"])
 
-    case = c.post(f"/drafts/{final['draft']['draft_id']}/submit", headers={"X-Role": "agent"}).json()
+    case = c.post(f"/drafts/{final['draft']['draft_id']}/submit", headers=agent).json()
     check(case["status"] == "pending_approval", f"agent sent {case['case_id']} to supervisor")
 
     print(f"  restarting app: {a.restart}")
@@ -81,23 +84,26 @@ def main() -> None:
     wait_healthy(a.base)
     check(True, "app restarted")
 
-    q = c.get("/approvals", headers={"X-Role": "supervisor"}).json()
+    # Sessions are server-side rows in Postgres, so the agent's sign-in also survives the restart.
+    check(c.get("/auth/me", headers=agent).status_code == 200, "agent still signed in after restart")
+    q = c.get("/approvals", headers=as_user(c, "ananya")).json()
     item = next((x for x in q if x["case_id"] == case["case_id"]), None)
     check(item is not None, "case still in supervisor queue after restart")
     # On a reused database an earlier hero case makes this a repeat dispute, one tier up.
-    approver = {"team_lead": "P01", "ops_manager": "P03", "regional_ops_head": "P04"}[item["approver_role"]]
-    res = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-                 json={"decision": "approve", "reason": "evidence reviewed", "approver_id": approver})
+    approver = APPROVER_FOR_TIER[item["approver_role"]]
+    sup = as_user(c, approver)
+    res = c.post(f"/approvals/{item['approval_id']}", headers=sup,
+                 json={"decision": "approve", "reason": "evidence reviewed"})
     body = res.json()
     check(res.status_code == 200 and body["status"] == "closed",
           f"supervisor ({approver}) approved; case graph resumed and closed"
           + ("" if res.status_code == 200 and body.get("status") == "closed" else f" -> {res.status_code} {body}"))
     check(body["result"]["credit"]["amount_inr"] == 18450, f"shadow credit posted: {body['result']['credit']['credit_id']}")
     print("  SMS draft:", body["result"]["notification"]["body"])
-    dup = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-                 json={"decision": "reject", "reason": "double click", "approver_id": approver})
+    dup = c.post(f"/approvals/{item['approval_id']}", headers=sup,
+                 json={"decision": "reject", "reason": "double click"})
     check(dup.status_code == 409, "second decision rejected with 409, no side effect")
-    trace = c.get(f"/cases/{case['case_id']}").json()["events"]
+    trace = c.get(f"/cases/{case['case_id']}", headers=sup).json()["events"]
     check([e["node"] for e in trace][-3:] == ["approval_gate", "execute_action", "notify"], "case trace has every step")
     print("ALL PASS")
 
