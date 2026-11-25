@@ -13,7 +13,7 @@ test:          ## unit tests (no database, no key)
 test-db:       ## all tests incl. database ones (needs Postgres on localhost:5432)
 	pytest -q -m "db or not db"
 
-eval:          ## full evaluation -> reports/eval.md (real models; ~25 min, about ₹150 at list prices)
+eval:          ## full evaluation -> reports/eval.md (real models; ~30 min, roughly ₹230 ≈ $2.6 at list prices: agent runs ₹97, routing ₹78, judge and held-out the rest)
 	python -m evals.run_eval
 
 eval-quick:    ## production config only, 1 repeat, no routing sample (~3 min)

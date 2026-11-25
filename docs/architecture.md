@@ -63,9 +63,19 @@ date, or enforces a permission, and in each of those a wrong answer is a regulat
 not a bad sentence. Code is testable with a table of cases (`tests/unit/test_calculator.py`),
 gives the same answer every time, and costs nothing per call. The LLM is used where language
 is the problem: classifying a messy agent note (Supervisor), turning it into a search query
-(rewrite), and writing a short cited answer (Composer). The evaluation backs this up: the
-scenarios that fail are routing and wording failures in the LLM nodes, never an amount, a
-due date or an approval tier (see `reports/eval.md`).
+(rewrite), and writing a short cited answer (Composer).
+
+The evaluation supports this only partly, and the limit matters. No failing scenario had a
+wrong *calculation*: given the inputs, the amount, the due date and the approver tier were
+always right. But the inputs are not all code. The Supervisor's intent and its extracted flags
+decide *which* calculation runs, and in eval run 1 that steered money twice: an LLM-set
+"customer at fault" flag with no evidence in the note (S24) changed the liability outcome, and
+an ATM cash-not-dispensed note classified as fraud (S09) would have blocked a card and applied
+the fraud-liability rule to a failed debit. Both are now overridden in code (the fault flag
+needs matching text in the note; a `failed_debited` transaction is never treated as fraud,
+D42, D43). The honest claim is narrower: code computes every number, but an LLM still chooses
+between code paths, and each such choice needs its own deterministic cross-check against bank
+data. See `reports/eval.md` for the remaining routing failures (S08b, S09 intent label).
 
 The trade-off: the deterministic graph handles only the intents it was built for. A new
 dispute type needs code, not a prompt change. For a regulated desk that is the right default.
