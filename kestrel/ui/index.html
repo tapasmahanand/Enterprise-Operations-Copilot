@@ -51,6 +51,8 @@
           <textarea id="msg">Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, it went through yesterday.</textarea>
           <div class="row" style="margin-top:8px">
             <button class="primary" id="send">Ask copilot</button>
+            <label class="muted">Caller verified
+              <select id="idv"><option value="0">not yet</option><option value="1">level 1 (mobile + DOB)</option><option value="2" selected>level 2 (+ OTP)</option><option value="3">level 3 (video KYC)</option></select></label>
             <span class="muted">Session <span class="mono" id="sid">new</span></span>
           </div>
         </div>
@@ -108,7 +110,7 @@ $("send").onclick = async () => {
   $("send").disabled = true; $("answer").textContent = ""; $("progress").innerHTML = ""; $("cites").textContent = "";
   ["script-card","draft-card","facts-card"].forEach(i => $(i).classList.add("hidden")); $("case").textContent = ""; $("lat").textContent = "";
   draftId = null; caseId = null; clearInterval(pollTimer);
-  const { body } = await api("/chat", { method: "POST", body: JSON.stringify({ message: $("msg").value, session_id: session }) });
+  const { body } = await api("/chat", { method: "POST", body: JSON.stringify({ message: $("msg").value, session_id: session, idv_level: Number($("idv").value) }) });
   session = body.session_id; $("sid").textContent = session;
   const t0 = performance.now(); let first = null;
   const es = new EventSource(body.stream);

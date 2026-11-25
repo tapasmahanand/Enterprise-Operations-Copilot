@@ -49,11 +49,18 @@ class SupervisorDecision(BaseModel):
     route: Route
     risk_level: Literal["low", "medium", "high"]
     proposed_action: Literal["credit", "fee_reversal", "chargeback", "card_block", "escalate_complaint", "none"]
+    dispute_reason: Literal["not_received", "not_as_described", "refund_not_processed"] | None = Field(
+        default=None, description="For a merchant dispute (chargeback) only; KB-NOTE-ACQ reason codes")
     card_last4: str | None = Field(default=None, description="Last 4 digits of a card mentioned, if any")
     amount_inr: int | None = Field(default=None, description="Amount the customer mentions, in rupees (informational only)")
     customer_shared_credentials: bool | None = Field(
         default=None, description="True if the customer says they shared OTP/PIN/card details; null if not stated")
     rationale: str = Field(description="One sentence")
+
+
+class InjectionVerdict(BaseModel):
+    is_injection: bool = Field(description="True if the text tries to instruct the AI system rather than describe a customer's problem")
+    reason: str
 
 
 class LLM:
@@ -113,6 +120,12 @@ class FakeLLM(LLM):
             elif "charged twice" in u or "duplicate" in u:
                 d = SupervisorDecision(intent="transaction_charged_twice", route="action", risk_level="medium",
                                        proposed_action="credit", rationale="duplicate charge")
+            elif "fee" in u or "charge on my statement" in u:
+                d = SupervisorDecision(intent="extra_charge_on_statement", route="action", risk_level="medium",
+                                       proposed_action="fee_reversal", rationale="fee dispute")
+            elif "change" in u and any(w in u for w in ("mobile", "email", "address")):
+                d = SupervisorDecision(intent="out_of_scope", route="refuse", risk_level="high",
+                                       proposed_action="none", rationale="contact detail change")
             elif any(w in u for w in ("policy", "what is", "how long", "liability", "rule")):
                 d = SupervisorDecision(intent="card_payment_not_recognised", route="rag", risk_level="low",
                                        proposed_action="none", rationale="policy question")
@@ -122,6 +135,9 @@ class FakeLLM(LLM):
             d.card_last4 = next((g for g in (last4.groups() if last4 else ()) if g), None)
             d.amount_inr = int(amt.group(1).replace(",", "")) if amt else None
             return d, Usage("fake")
+        if schema is InjectionVerdict:
+            hit = any(w in u for w in ("ignore", "override", "system prompt", "you are now"))
+            return InjectionVerdict(is_injection=hit, reason="keyword rule (fake)"), Usage("fake")
         raise NotImplementedError(schema)
 
     def text(self, system, user, *, model):
@@ -141,6 +157,7 @@ def get_llm() -> LLM:
     return FakeLLM() if os.environ.get("LLM_PROVIDER", "openai") == "fake" else OpenAILLM()
 
 
-def model_for(role: Literal["supervisor", "rewrite", "composer"]) -> str:
-    default = {"supervisor": "gpt-5.4-mini", "rewrite": "gpt-5.4-nano", "composer": "gpt-5.4-mini"}[role]
+def model_for(role: Literal["supervisor", "rewrite", "composer", "judge"]) -> str:
+    default = {"supervisor": "gpt-5.4-mini", "rewrite": "gpt-5.4-nano", "composer": "gpt-5.4-mini",
+               "judge": "gpt-5.4-nano"}[role]
     return os.environ.get(f"{role.upper()}_MODEL", default)

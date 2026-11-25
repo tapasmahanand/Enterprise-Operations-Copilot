@@ -211,3 +211,37 @@ ALTER TABLE cases ADD COLUMN IF NOT EXISTS draft_id TEXT;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS approver_role TEXT;
 ALTER TABLE cases ADD COLUMN IF NOT EXISTS result JSONB;
 CREATE UNIQUE INDEX IF NOT EXISTS approvals_one_per_case ON approvals (case_id);
+
+-- Milestone 3: job queue details, escalations, ticket notes -----------------------
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS run_after   TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS locked_at   TIMESTAMPTZ;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS max_attempts INT NOT NULL DEFAULT 3;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS dedupe_key  TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requested_by TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress    JSONB NOT NULL DEFAULT '{}';
+-- At most one live job per dedupe key (e.g. one scheduled TAT sweep at a time).
+CREATE UNIQUE INDEX IF NOT EXISTS jobs_live_dedupe ON jobs (dedupe_key) WHERE state IN ('queued', 'running');
+DROP INDEX IF EXISTS jobs_queued;
+CREATE INDEX IF NOT EXISTS jobs_claimable ON jobs (run_after) WHERE state = 'queued';
+
+CREATE TABLE IF NOT EXISTS escalations (
+    escalation_id   TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL,
+    level           TEXT NOT NULL CHECK (level IN ('grievance', 'ombudsman_pack')),
+    reason          TEXT NOT NULL,
+    created_by      TEXT NOT NULL,              -- agent | tat_sweeper
+    rule_id         TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (case_id, level)
+);
+
+CREATE TABLE IF NOT EXISTS mock_chargebacks (
+    chargeback_id   TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL UNIQUE,         -- idempotent per case (D18)
+    txn_id          TEXT NOT NULL,
+    reason_code     TEXT NOT NULL,
+    amount_inr      INT  NOT NULL,
+    evidence        JSONB NOT NULL DEFAULT '[]',
+    status          TEXT NOT NULL DEFAULT 'filed',
+    filed_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);

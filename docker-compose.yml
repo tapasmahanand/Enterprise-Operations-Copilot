@@ -85,6 +85,16 @@ services:
       timeout: 3s
       retries: 20
 
+  worker:
+    build: .
+    command: ["python", "-m", "kestrel.jobs.worker"]
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   # --- self-hosted Langfuse v3 (observability) -------------------------------------
   langfuse-web:
     image: langfuse/langfuse:3

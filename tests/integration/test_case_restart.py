@@ -33,7 +33,7 @@ def db(db_url):
     with connect(db_url) as conn:
         apply_schema(conn)
         seed(conn, anchor=date(2026, 11, 25), force=True)
-        conn.execute("TRUNCATE notifications, mock_credits, approvals, cases, drafts CASCADE")
+        conn.execute("TRUNCATE notifications, mock_credits, mock_chargebacks, approvals, cases, drafts CASCADE")
         conn.commit()
     return db_url
 
@@ -109,3 +109,34 @@ c.start_case = lambda *a, **k: None
 print(json.dumps(c.submit_draft({draft!r}), default=str))""")
     out = run_py(db, "import json; from kestrel.graphs.case import reconcile; print(json.dumps(reconcile()))")
     assert out == {"started": 1, "resumed": 0}
+
+
+@pytest.mark.parametrize("action, tpl_text, table", [
+    ({"action": "fee_reversal", "kind": "fee_reversal", "account_id": "A1001", "txn_id": "T1003", "amount_inr": 23,
+      "card_last4": "4821", "approver_role": "team_lead"}, "fee on your Kestrel account", "mock_credits"),
+    ({"action": "chargeback", "kind": "not_received", "account_id": "A2001", "txn_id": "T2001", "amount_inr": 4999,
+      "card_last4": "7710", "approver_role": "team_lead"}, "raised a dispute with the merchant", "mock_chargebacks"),
+])
+def test_other_actions_execute_after_restart(db, action, tpl_text, table):
+    evidence = [{"chunk_id": "KB-SOP-CHARGEBACK:0"}, {"tool": "transaction_lookup", "txn": {"txn_id": action["txn_id"]}}]
+    draft = run_py(db, f"""
+import json; from kestrel.cases import create_draft
+print(json.dumps(create_draft('S1', 'R1', {action!r}, {evidence!r}, None)))""")
+    case = run_py(db, f"import json; from kestrel.cases import submit_draft; print(json.dumps(submit_draft({draft!r}), default=str))")
+    done = run_py(db, f"""import json; from kestrel.cases import decide
+print(json.dumps(decide({case['approval']['approval_id']!r}, 'approve', 'P01', 'ok'), default=str))""")
+    assert done["status"] == "closed" and tpl_text in done["result"]["notification"]["body"]
+    with connect(db) as conn:
+        assert conn.execute(f"SELECT count(*) FROM {table} WHERE case_id = %s", (case["case_id"],)).fetchone()[0] == 1
+
+
+def test_team_lead_cannot_approve_above_tier(db):
+    big = {**ACTION, "amount_inr": 64000, "approver_role": "ops_manager"}
+    draft = run_py(db, f"import json; from kestrel.cases import create_draft; print(json.dumps(create_draft('S1','R1',{big!r},[],None)))")
+    case = run_py(db, f"import json; from kestrel.cases import submit_draft; print(json.dumps(submit_draft({draft!r}), default=str))")
+    out = run_py(db, f"""import json; from kestrel.cases import decide, Forbidden
+try:
+    decide({case['approval']['approval_id']!r}, 'approve', 'P01', 'ok'); print(json.dumps('allowed'))
+except Forbidden as f:
+    print(json.dumps('forbidden'))""")
+    assert out == "forbidden"

@@ -44,7 +44,7 @@ app = FastAPI(title="Kestrel Resolution Copilot", version="0.2.0", lifespan=life
 # Raw agent text waits here (in memory only) between POST /chat and GET /stream. It is
 # never written anywhere unmasked; if the app restarts in those seconds the run is lost
 # and the agent resends (D19).
-_PENDING: dict[str, tuple[float, str, str, str | None]] = {}
+_PENDING: dict[str, tuple[float, str, str, str | None, int]] = {}
 _LOCK = threading.Lock()
 PENDING_TTL_S = 120
 
@@ -92,6 +92,7 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=2, max_length=4000)
     session_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     account_id: str | None = Field(default=None, pattern=r"^[A-Z0-9]{3,16}$")
+    idv_level: int = Field(default=0, ge=0, le=3, description="Caller verification level the agent completed (KB-SOP-IDV)")
 
 
 @app.post("/chat")
@@ -107,7 +108,7 @@ def chat(body: ChatIn, x_role: str | None = Header(default=None)) -> dict:
     with _LOCK:
         for k in [k for k, v in _PENDING.items() if now - v[0] > PENDING_TTL_S]:
             del _PENDING[k]
-        _PENDING[run_id] = (now, session_id, body.message, body.account_id)
+        _PENDING[run_id] = (now, session_id, body.message, body.account_id, body.idv_level)
     return {"run_id": run_id, "session_id": session_id, "thread_id": session_id, "stream": f"/stream/{run_id}"}
 
 
@@ -121,7 +122,7 @@ def stream(run_id: str) -> StreamingResponse:
         pending = _PENDING.pop(run_id, None)
     if pending is None:
         raise HTTPException(404, "unknown or already-streamed run")
-    _, session_id, message, account_id = pending
+    _, session_id, message, account_id, idv_level = pending
 
     def gen():
         from kestrel.graphs.chat import stream_run
@@ -130,13 +131,17 @@ def stream(run_id: str) -> StreamingResponse:
         t0 = time.perf_counter()
         yield _sse({"type": "start", "run_id": run_id, "session_id": session_id})
         try:
-            for ev in stream_run(run_id, session_id, message, account_id):
+            for ev in stream_run(run_id, session_id, message, account_id, idv_level):
                 if ev.get("type") == "final":
                     final = ev
                 yield _sse(ev)
             ms = int((time.perf_counter() - t0) * 1000)
             _set_run(run_id, "done", {**final, "latency_ms": ms})
             flush_traces()
+            # Summary refresh is a background job, never on the hot path (design §5.1).
+            from kestrel.jobs import queue
+            queue.enqueue("memory_summary", {"session_id": session_id}, requested_by="chat",
+                          dedupe_key=f"memory_summary:{session_id}")
             yield _sse({"type": "done", "run_id": run_id, "latency_ms": ms, "trace_url": trace_url(run_id)})
         except Exception as e:  # noqa: BLE001 - surface, don't hang the stream
             log.exception("run %s failed", run_id)
@@ -229,3 +234,32 @@ def decide(approval_id: str, body: DecisionIn, x_role: str | None = Header(defau
         raise HTTPException(403, str(f))
     except cases.Conflict as c:
         return JSONResponse({"detail": "approval already decided", "existing": c.existing}, status_code=409)
+
+
+# --- async jobs ------------------------------------------------------------------------
+
+class JobIn(BaseModel):
+    job_type: Literal["enron_compliance_scan", "tat_sweep"]
+    payload: dict = Field(default_factory=dict)
+
+
+@app.post("/jobs", status_code=202)
+def create_job(body: JobIn, x_role: str | None = Header(default=None)) -> dict:
+    """Returns immediately with a job id; the worker container runs it."""
+    from kestrel.jobs import queue
+    role = _role(x_role, "compliance", "supervisor")
+    if body.job_type == "enron_compliance_scan" and role != "compliance":
+        raise HTTPException(403, "only the compliance role can start a compliance scan")
+    allowed = {"enron_compliance_scan": {"limit"}, "tat_sweep": {"as_of"}}[body.job_type]
+    if set(body.payload) - allowed:   # e.g. no file paths from the client
+        raise HTTPException(422, f"{body.job_type} accepts only {sorted(allowed)}")
+    return queue.enqueue(body.job_type, body.payload, requested_by=role)
+
+
+@app.get("/jobs/{job_id}")
+def get_job(job_id: str) -> dict:
+    from kestrel.jobs import queue
+    try:
+        return queue.get_job(job_id)
+    except KeyError:
+        raise HTTPException(404, "job not found")

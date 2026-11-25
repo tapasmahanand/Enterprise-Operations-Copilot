@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import random
 import time
 from typing import Any, Callable
 
@@ -24,8 +26,24 @@ class ToolError(Exception):
 TRANSIENT = (psycopg.OperationalError, TimeoutError, ConnectionError)
 
 
+def _injected_fault(tool: str, attempt: int) -> bool:
+    """FAULT_INJECT="transaction_lookup:fail_first=1" or "transaction_lookup:rate=0.3".
+    Demo/test only: shows retries in the trace without breaking a real dependency."""
+    for spec in filter(None, os.environ.get("FAULT_INJECT", "").split(";")):
+        name, _, rule = spec.partition(":")
+        if name.strip() != tool:
+            continue
+        key, _, val = rule.partition("=")
+        if key == "fail_first" and attempt <= int(val):
+            return True
+        if key == "rate" and random.random() < float(val):
+            return True
+    return False
+
+
 def run_tool(fn: Callable[..., Any], args_model: type[BaseModel], raw_args: dict[str, Any],
-             *, retries: int = 2, backoff_s: float = 0.2) -> ToolResult:
+             *, retries: int = 2, backoff_s: float = 0.2, name: str | None = None) -> ToolResult:
+    tool = name or fn.__name__.lstrip("_")
     try:
         args = args_model.model_validate(raw_args)
     except ValidationError as e:
@@ -34,6 +52,8 @@ def run_tool(fn: Callable[..., Any], args_model: type[BaseModel], raw_args: dict
     while True:
         attempt += 1
         try:
+            if _injected_fault(tool, attempt):
+                raise ConnectionError(f"injected fault in {tool}")
             return ToolResult(ok=True, data=fn(args), attempts=attempt)
         except ToolError as e:
             return ToolResult(ok=False, error=str(e), attempts=attempt)
