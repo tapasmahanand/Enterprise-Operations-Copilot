@@ -41,9 +41,13 @@ def ingest_banking77(conn, settings) -> int:
 def ingest_corpus(conn, settings, embedder) -> dict[str, int]:
     docs = load_corpus(settings.corpus_dir)
     stats = {"documents": len(docs), "embedded": 0, "skipped": 0, "chunks": 0}
-    existing = dict(conn.execute("SELECT document_id, content_hash FROM documents").fetchall())
+    # Skip only when both the content and the embedding model are unchanged; switching
+    # from the fake embedder to OpenAI must re-embed everything.
+    existing = {r[0]: (r[1], r[2]) for r in conn.execute(
+        """SELECT d.document_id, d.content_hash, min(c.metadata->>'embedding_model')
+           FROM documents d LEFT JOIN document_chunks c USING (document_id) GROUP BY 1, 2""").fetchall()}
     for doc in docs:
-        if existing.get(doc.document_id) == doc.content_hash:
+        if existing.get(doc.document_id) == (doc.content_hash, embedder.model):
             stats["skipped"] += 1
             continue
         chunks = chunk_document(doc)
