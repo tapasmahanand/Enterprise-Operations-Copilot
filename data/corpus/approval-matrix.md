@@ -4,6 +4,7 @@ title: Approval Matrix for Tier-1 Actions
 document_type: matrix
 department: operations
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-11-01
 status: current
 ---

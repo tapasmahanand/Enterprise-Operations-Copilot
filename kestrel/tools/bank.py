@@ -200,18 +200,22 @@ def escalate_complaint(**kw) -> ToolResult:
 
 class PolicyLookupArgs(BaseModel):
     policy_id: str = Field(pattern=r"^KB-[A-Z0-9-]+$")
+    reader_groups: list[str]   # the caller's groups (Principal.groups); required, no default (D54)
 
 
 def _policy_lookup(a: PolicyLookupArgs) -> dict:
-    """Exact fetch by id, current version only. A superseded id returns its successor's id."""
+    """Exact fetch by id, current version only. A superseded id returns its successor's id.
+    Same access rule as retrieval (D54): a document outside the reader's groups answers
+    exactly like a missing one, so the lookup doesn't confirm that it exists."""
     with connect() as conn:
-        row = conn.execute("SELECT document_id, title, status, effective_from FROM documents WHERE document_id = %s",
-                           (a.policy_id,)).fetchone()
+        row = conn.execute("""SELECT document_id, title, status, effective_from FROM documents
+                              WHERE document_id = %s AND audience && %s::text[]""",
+                           (a.policy_id, a.reader_groups)).fetchone()
         if row is None:
             raise ToolError(f"policy {a.policy_id} not found")
         if row[2] != "current":
-            succ = conn.execute("SELECT document_id FROM documents WHERE supersedes = %s AND status = 'current'",
-                                (a.policy_id,)).fetchone()
+            succ = conn.execute("""SELECT document_id FROM documents WHERE supersedes = %s AND status = 'current'
+                                   AND audience && %s::text[]""", (a.policy_id, a.reader_groups)).fetchone()
             raise ToolError(f"{a.policy_id} is superseded" + (f"; use {succ[0]}" if succ else ""))
         chunks = conn.execute("SELECT chunk_id, chunk_text FROM document_chunks WHERE document_id = %s ORDER BY chunk_index",
                               (a.policy_id,)).fetchall()
@@ -219,8 +223,8 @@ def _policy_lookup(a: PolicyLookupArgs) -> dict:
             "chunks": [{"chunk_id": c[0], "text": c[1]} for c in chunks]}
 
 
-def policy_lookup(**kw) -> ToolResult:
-    return run_tool(_policy_lookup, PolicyLookupArgs, kw)
+def policy_lookup(*, principal, **kw) -> ToolResult:
+    return run_tool(_policy_lookup, PolicyLookupArgs, {**kw, "reader_groups": sorted(principal.groups)})
 
 
 class OrgLookupArgs(BaseModel):

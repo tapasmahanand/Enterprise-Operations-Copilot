@@ -4,6 +4,7 @@ title: Resolution Copilot — Acceptable Use for Agents
 document_type: policy
 department: compliance
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-11-01
 status: current
 ---

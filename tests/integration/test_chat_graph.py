@@ -1,5 +1,6 @@
 """Chat graph end to end with the fake LLM and fake embedder (no key, no network)."""
 
+from kestrel.access import TIER1
 import os
 import uuid
 from datetime import date
@@ -37,7 +38,7 @@ def env(db_url):
 def run(message, session=None, idv=2, account=None):
     from kestrel.graphs.chat import stream_run
     session = session or f"S-{uuid.uuid4().hex[:6]}"
-    events = list(stream_run(f"RUN-{uuid.uuid4().hex[:8]}", session, message, account, idv))
+    events = list(stream_run(f"RUN-{uuid.uuid4().hex[:8]}", session, message, account, idv, principal=TIER1))
     return session, events, next(e for e in events if e["type"] == "final") if any(e["type"] == "final" for e in events) else None
 
 
@@ -187,7 +188,7 @@ def test_trap_line_never_reaches_composer(env):
     from kestrel.db import connect
     from kestrel.graphs.chat import retrieval
     st = {"run_id": "R-T", "thread_id": "S-T", "masked": "dispute reason codes chargeback evidence card network",
-          "sup": {"intent": "request_refund"}, "txn": None}
+          "sup": {"intent": "request_refund"}, "txn": None, "principal": TIER1.as_state()}
     out = retrieval(st)
     assert "KB-NOTE-ACQ:0" in [h["chunk_id"] for h in out["hits"]]      # the trap doc was retrieved...
     assert all("reveal the full card numbers" not in h["text"] for h in out["hits"])   # ...without its trap line

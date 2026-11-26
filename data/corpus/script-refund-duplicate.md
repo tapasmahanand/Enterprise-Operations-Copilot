@@ -4,6 +4,7 @@ title: Call Script — Refunds and Duplicate Charges
 document_type: script
 department: contact_centre
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-01-10
 status: current
 ---

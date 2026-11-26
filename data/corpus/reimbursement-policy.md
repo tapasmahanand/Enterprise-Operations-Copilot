@@ -4,6 +4,7 @@ title: Customer Reimbursement for Bank-side Errors
 document_type: policy
 department: disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-06-01
 status: current
 ---

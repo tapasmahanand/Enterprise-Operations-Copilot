@@ -28,6 +28,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from psycopg.types.json import Jsonb
 
+from kestrel.access import Principal
 from kestrel.cases import create_draft
 from kestrel.checkpoint import get_checkpointer
 import yaml
@@ -59,6 +60,7 @@ class ChatState(TypedDict, total=False):
     session_id: str
     account_id: str | None          # customer context from the agent's CRM screen, if any
     idv_level: int                  # caller identity verification level done by the agent (KB-SOP-IDV)
+    principal: dict[str, Any]       # who is reading: user id + groups from the session (D54)
     refusal: dict[str, str] | None
     repeat_dispute: bool
     duplicate_of: str | None
@@ -157,13 +159,17 @@ def memory_load(state: ChatState) -> dict:
 INTENTS: dict[str, dict] = yaml.safe_load((ROOT / "rules" / "intents.yaml").read_text())["in_scope"]
 
 
-def _kb_topics() -> str:
-    """Titles of the current (not superseded) KB documents: the desk's scope is what its documents cover (D48)."""
+def _kb_topics(principal: Principal) -> str:
+    """Titles of the current (not superseded) KB documents this reader may see: the desk's scope
+    is what its documents cover (D48). Filtered by audience (D54): a restricted document's title
+    in the Supervisor prompt would put it in the model's context as surely as its text would."""
     out = []
     for f in sorted((ROOT / "data" / "corpus").glob("*.md")):
         head = f.read_text(encoding="utf-8").split("---")[1] if f.read_text(encoding="utf-8").startswith("---") else ""
         meta = yaml.safe_load(head) or {}
-        if meta.get("status", "current") != "superseded" and meta.get("title"):
+        aud = meta.get("audience") or []
+        if (meta.get("status", "current") != "superseded" and meta.get("title")
+                and principal.can_read([aud] if isinstance(aud, str) else aud)):
             out.append(f"- {meta['title']}")
     return "\n".join(out)
 
@@ -208,7 +214,8 @@ def supervisor(state: ChatState) -> dict:
     ctx = state.get("entities") or {}
     user = state["masked"] + (f"\n\n(Known from earlier in this call: {ctx})" if ctx else "") + \
         (f"\n(Call summary so far: {state['summary']})" if state.get("summary") else "")
-    d, usage = get_llm().structured(SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics()), user,
+    reader = Principal.from_state(state.get("principal"))
+    d, usage = get_llm().structured(SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics(reader)), user,
                                     SupervisorDecision, model=model_for("supervisor"))
     scope_check = None
     if d.intent == "out_of_scope" and d.route != "rag":
@@ -262,7 +269,7 @@ def _scope_check(state: ChatState) -> dict:
         return {"covered": False, "skipped": "injection signal"}
     vec = make_embedder(get_settings()).embed([state["masked"]])[0]
     with connect() as conn:
-        top = vector_search(conn, vec, k=2)
+        top = vector_search(conn, vec, k=2, principal=Principal.from_state(state.get("principal")))
     threshold = float(os.environ.get("SCOPE_MIN_SIMILARITY", SCOPE_MIN_SIMILARITY))
     close = [h for h in top if h.score >= threshold]
     out = {"covered": False, "similarity": round(top[0].score, 4) if top else 0.0, "threshold": threshold}
@@ -455,7 +462,7 @@ def retrieval(state: ChatState) -> dict:
     s = get_settings()
     vec = make_embedder(s).embed([q])[0]
     with connect() as conn:
-        hits = vector_search(conn, vec, k=10, txn_date=txn_date)
+        hits = vector_search(conn, vec, k=10, txn_date=txn_date, principal=Principal.from_state(state.get("principal")))
     min_score = float(os.environ.get("RETRIEVAL_MIN_SCORE", "0.2"))
     # Retrieved text is untrusted.
     # Lines aimed at the model are stripped from each chunk (D30); the rest is kept.
@@ -764,16 +771,19 @@ _PER_RUN_RESET = {"blocked_reason": None, "refusal": None, "repeat_dispute": Fal
                   "citations": [], "script": None, "output_check": {}, "tokens_used": 0}
 
 
-def run_input(run_id: str, session_id: str, message: str, account_id: str | None = None, idv_level: int = 0) -> dict:
+def run_input(run_id: str, session_id: str, message: str, account_id: str | None = None, idv_level: int = 0, *,
+              principal: Principal) -> dict:
     m = mask_pii(message)
     return {**_PER_RUN_RESET, "run_id": run_id, "thread_id": session_id, "session_id": session_id,
-            "account_id": account_id, "idv_level": idv_level, "masked": m.text,
+            "account_id": account_id, "idv_level": idv_level, "masked": m.text, "principal": principal.as_state(),
             "pii": {"found": m.found, "card_last4": m.card_last4, "secret_present": m.secret_present}}
 
 
-def stream_run(run_id: str, session_id: str, message: str, account_id: str | None = None, idv_level: int = 0):
-    """Yields progress/token/draft/final events as dicts."""
+def stream_run(run_id: str, session_id: str, message: str, account_id: str | None = None, idv_level: int = 0, *,
+               principal: Principal):
+    """Yields progress/token/draft/final events as dicts. `principal` (required, D54) decides
+    which documents retrieval may return; the API passes the signed-in user's."""
     cfg = {"configurable": {"thread_id": session_id}, "recursion_limit": 20}  # node-visit budget
     with root_span(run_id, "chat_run", session_id=session_id):
-        for ev in chat_graph().stream(run_input(run_id, session_id, message, account_id, idv_level), cfg, stream_mode="custom"):
+        for ev in chat_graph().stream(run_input(run_id, session_id, message, account_id, idv_level, principal=principal), cfg, stream_mode="custom"):
             yield ev

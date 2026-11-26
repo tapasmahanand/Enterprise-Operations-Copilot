@@ -4,6 +4,7 @@ title: Shadow Credit Procedure
 document_type: sop
 department: fraud_disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-04-01
 status: current
 ---

@@ -4,6 +4,7 @@ title: Card Network Bulletin Summary — Dispute Reason Codes
 document_type: guideline
 department: disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-10-01
 status: current
 ---

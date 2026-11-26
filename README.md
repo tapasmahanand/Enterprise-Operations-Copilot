@@ -33,6 +33,7 @@ Every endpoint except `/health`, the page itself and `/auth/login` needs a sessi
 | `farah` | supervisor (P03, ops manager) | ops-manager cases |
 | `rohan` | supervisor (P04, regional ops head) | everything |
 | `compliance1` | compliance | — (starts compliance scans, reads the audit log) |
+| `fraud1` | agent, member of `fraud_operations` | — (can also retrieve Fraud Operations documents) |
 
 The approver on an approval is the signed-in supervisor; there is no way to name another one. Sign-ins, chats (with the IDV level the agent attested), submissions, approvals, denials and jobs go to an append-only `audit_log` (Audit tab, or `GET /audit`). Scripts sign in with `POST /auth/login` and send `Authorization: Bearer <token>`.
 
@@ -42,8 +43,16 @@ The approver on an approval is the signed-in supervisor; there is no way to name
 - **The audit log stops the app, not the DBA.** The append-only trigger can be dropped by the database owner, and the app connects as the owner. Production needs a separate INSERT-only role and off-box storage or a hash chain (D52).
 - **Demo credentials.** One shared password, no MFA, no password change or reset, users only from the seed. Login throttling is in memory per process (5 failures per 15 minutes) and resets on restart.
 - **No HTTPS here.** The cookie is `Secure` only with `COOKIE_SECURE=1`; on plain HTTP a network observer can steal a session. CSRF rests on `SameSite=Strict` plus JSON bodies; there is no CSRF token.
-- **Supervisors can read every case and run.** Agents are limited to their own; there is no per-team or per-branch scoping, and retrieval has no access control yet (no department filter is applied).
+- **Supervisors can read every case and run.** Agents are limited to their own; there is no per-team or per-branch scoping. Document ids from documents a supervisor can't read are redacted in what they see (next section), but the rest of the run is visible.
 - **Langfuse and Postgres have their own logins** (compose defaults), unrelated to this sign-in.
+
+## Document access control (D54)
+
+Every policy document names its `audience` in its front-matter (`[all_staff]`, or for example `[fraud_operations]`); ingest refuses a document without one or with an unknown group. A signed-in user's groups are `all_staff` plus their rows in `user_groups` (server-side; nothing the client sends adds a group). Retrieval filters on `audience && groups` **in the same SQL statement that ranks by vector distance**, on the main retrieval path and on the out-of-scope re-check (D48); the KB topic titles in the Supervisor prompt and the exact-id `policy_lookup` tool use the same rule, and a document you can't read looks exactly like a missing one. The transaction-date filter (D13) is unchanged.
+
+Proof: `tests/integration/test_access_rag.py` makes the restricted `KB-FRAUD-PLAYBOOK` the closest match (asserted first, without the filter), asks the same question as `agent1` and `fraud1` through the API, and checks that the tier-1 run has the playbook nowhere: not in any prompt sent to the model, the citation candidates, citations, answer, `run_events` rows or `GET /runs`. The fraud specialist's run cites it. A supervisor reading the specialist's run gets the ids replaced by `[restricted]`.
+
+Limits: only one restricted document exists, so this is a mechanism, not a permission model; groups are seeded, with no admin UI; with an HNSW index pgvector filters the index's candidate list, so a very selective audience can return fewer than k chunks (lost recall, never a leak). Langfuse traces are visible to anyone with a Langfuse login and are not redacted.
 
 ## Hero demo (unauthorised ₹18,450 card payment)
 
@@ -165,7 +174,7 @@ approved with the credit posted once (06). They were taken before sign-in was ad
 | RBI figures and sources, rule by rule | `docs/rbi-sources.md` |
 | Liability / TAT calculator (pure functions) | `kestrel/rules/calculator.py` |
 | Approval matrix | `kestrel/rules/approval.py` |
-| Synthetic policy corpus (29 docs, incl. a superseded version and two prompt-injection traps) | `data/corpus/` |
+| Synthetic policy corpus (30 docs, incl. a superseded version, two prompt-injection traps and one Fraud-Operations-only playbook) | `data/corpus/` |
 | BANKING77 (routing labels) and in-scope intents | `data/banking77/`, `rules/intents.yaml` |
 | Schema | `db/schema.sql` |
 | Ingest (mock bank data, BANKING77, chunk → embed → PGVector) | `kestrel/ingest/` |

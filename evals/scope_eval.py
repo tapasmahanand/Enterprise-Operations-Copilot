@@ -11,6 +11,8 @@ code refusal such as KB-REF-1/2), or answered; and whether a draft action was cr
 
 from __future__ import annotations
 
+from kestrel.access import TIER1
+
 import argparse
 import json
 import os
@@ -33,7 +35,7 @@ def classify(item: dict) -> dict:
         conn.commit()
     run_id, session = f"SCOPE-{uuid.uuid4().hex[:8]}", f"S-SCOPE-{uuid.uuid4().hex[:6]}"
     final = None
-    for ev in stream_run(run_id, session, item["note"], None, item.get("idv", 0)):
+    for ev in stream_run(run_id, session, item["note"], None, item.get("idv", 0), principal=TIER1):
         if ev["type"] == "final":
             final = ev
     st = chat_graph().get_state({"configurable": {"thread_id": session}}).values

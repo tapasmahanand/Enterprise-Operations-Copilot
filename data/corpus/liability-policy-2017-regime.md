@@ -4,6 +4,7 @@ title: Customer Liability in Unauthorised Electronic Banking Transactions (trans
 document_type: policy
 department: fraud_disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-04-01
 status: current
 applies_to_txn_before: 2027-01-01
