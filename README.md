@@ -122,51 +122,58 @@ Offline / no key: set `EMBEDDING_PROVIDER=fake` in `.env` (lexical test embeddin
 
 ## Results (Milestone 4)
 
-Full numbers: [reports/eval.md](reports/eval.md) (run 5, 26 Nov 2026, on `main` after access-controlled
-RAG, the outbox, NATS and the MCP connector; 25 tuned scenarios plus 8 held-out, each 3 times per
-model). Run it yourself with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD
+Full numbers: [reports/eval.md](reports/eval.md) (run 6, 26 Nov 2026, after the fee-reversal routing
+fix D58; 25 tuned scenarios plus 8 held-out, each 3 times per model). Run it yourself with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD
 assumed). Earlier runs are kept in `reports/eval-run*.md`.
 
-**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 5, run 4 in brackets):
+**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 6, run 5 in brackets):
 
 | | gpt-5.4-mini (production) | gpt-5.4 |
 |---|---|---|
-| Scenario runs passing | 95/99 (86/99) | 94/99 (90/99) |
-| Held-out scenarios passing all repeats | **8/8** (7/8) | **8/8** (6/8) |
-| Outcome correct (draft / no draft / amount / tier) | 97% (97%) | 97% (94%) |
-| Intent label correct | 98% (92%) | 100% (100%) |
-| Cites the governing policy | 100% (90%) | 96% (94%) |
-| Groundedness: supported claims (LLM judge) | 89% (91%) | 88% (91%) |
-| Answers with zero unsupported claims | 32% (48%) | 31% (37%) |
-| BANKING77 intent accuracy (n=200) | 73% (77%) | 77% (80%) |
-| Out-of-scope correctly refused | 71% (80%) | 71% (70%) |
-| Latency p50 / p95 | 4.0 s / 6.0 s (3.8 / 4.4) | 5.6 s / 6.3 s (5.3 / 6.2) |
-| Cost per copilot answer | ₹0.27 (₹0.23) | ₹0.92 (₹0.77) |
+| Scenario runs passing | 93/99 (95/99) | **97/99** (94/99) |
+| Held-out scenarios passing all repeats | **8/8** (8/8) | **8/8** (8/8) |
+| Outcome correct (draft / no draft / amount / tier) | **100%** (97%) | **100%** (97%) |
+| Intent label correct | 94% (98%) | 100% (100%) |
+| Cites the governing policy | 96% (100%) | 96% (96%) |
+| Groundedness: supported claims (LLM judge) | 91% (89%) | 90% (88%) |
+| Answers with zero unsupported claims | 48% (32%) | 31% (31%) |
+| BANKING77 intent accuracy (n=200) | 76% (73%) | 78% (77%) |
+| Out-of-scope correctly refused | 77% (71%) | 71% (71%) |
+| Latency p50 / p95 | 3.5 s / 4.0 s (4.0 / 6.0) | 5.3 s / 6.0 s (5.6 / 6.3) |
+| Cost per copilot answer | ₹0.28 (₹0.27) | ₹0.95 (₹0.92) |
 
 What moved, and why we think so:
-- **Pass rate up** (86 → 95 on mini). Most of it matches the D48 scope fix, which already
-  measured 91/99 on mini without the judge ([reports/eval-scopefix.md](reports/eval-scopefix.md)).
-  The remaining failures: S08b (fee reversal routed wrong in every repeat, a known open issue)
-  on both models, plus S09 (intent, once) on mini and S15 (citation, twice) on gpt-5.4.
-- **Out-of-scope refusals down** (80% → 71%) and **cost and latency up** are the trade-off D48
-  already reported for the KB re-check: more borderline requests are answered from documents.
-- **Zero-unsupported-claim answers down** (48% → 32%). That's one judge pass over about 28
-  answers. Most flagged "claims" are procedural steps such as "click Send to supervisor", the
-  same pattern as in run 4. We have not established whether this is a real drop or judge noise.
-- **BANKING77 accuracy down 3 to 4 points** on n=200. Inside the noise of a 200-query sample,
-  but not shown to be noise.
+- **S08b fixed** (0/3 → 3/3 on both models; fee reversal ₹23 drafted for a team lead). Root cause was
+  the Supervisor prompt: fee intents carried "default route: rag/tools" and nothing said when to leave
+  it, so every fee-error note went to rag/tools (0/24 on held-out probes written before the fix, both
+  models). After D58: 22/24 on mini, 24/24 on gpt-5.4, and none of the no-reversal fee notes (explain a fee,
+  policy question, goodwill waiver) moved to action (`evals/fee_route_probe.py`). Outcome correctness is now 100% on both models.
+- **mini's pass count is down 2** (95 → 93) although S08b gained 3: S09 failed its intent label in all
+  3 repeats (was 1 of 3) and S15 its citation once. S09's outcome is still right (no draft, correct
+  policy). An A/B of the Supervisor on S09's note, old prompt vs new, 20 calls each, gave the same
+  label distribution, so we read this as mini's known S09 flakiness, not the fix.
+- **Zero-unsupported answers up on mini** (32% → 48%), **BANKING77 up 3 points, out-of-scope refusal up
+  6 points** on mini. The fix didn't target any of these; a 29-answer judge pass and a 200-query sample
+  are inside run-to-run noise, so we don't claim them. What we can say is they did not get worse.
+  Most flagged "claims" are still procedural ("click Send to supervisor") said when no draft exists.
+- **Scope side effect, found and fixed before this run:** with only the prompt change, "charged in
+  error, can we reverse it?" asked before OTP ended in a KB-REF-1 refusal with no policy answer (11 of
+  42 valid fee runs on mini). D58 answers those from the fee policy and names the OTP step instead; a
+  note that says verification is missing ("no OTP, reverse it anyway") is still refused. On the 35
+  fee-related scope-set items: adversarial stopped in 18/18 runs (w-a10 was missed before), no draft
+  in any run. Remaining cost: t-v18 (a bank-error overdraft charge, read as a duplicate) is now refused
+  at IDV 0 on mini, 2 of 2 runs.
 
 Production stays on mini: on this run the two models are equal on pass rate and outcomes, and
 gpt-5.4 costs 3.4× as much.
 
 **Ops and compliance** (production config): 0 unapproved promises reached the agent; 0 invented
-citations; 100% of 21 drafted actions carry a complete audit trail; the TAT sweeper caught 6/6
+citations; 100% of 24 drafted actions carry a complete audit trail; the TAT sweeper caught 6/6
 breaches in a 60-case simulation, warning a median 2 days ahead. The 10% deadline-breach rate
 depends on an **assumed** approval delay; it measures staffing, not the software.
 
-Run 5: the output check withheld 1 of 87 composed answers (H06, "is approved"). The raw
-text isn't stored, so we can't say whether it was a real promise or another guard false positive
-like the three negated H07 phrases found in run 4 (fixed in D47).
+Run 6: the output check withheld 0 of 87 composed answers, and the raw stream attempted 0 promises
+(run 5 withheld 1, H06 "is approved"; its raw text isn't stored, so whether it was real is unknown).
 
 **Compliance scan accuracy** (226 hand-labelled Enron emails, stratified, population-weighted;
 [evals/compliance/README.md](evals/compliance/README.md)): precision **71%** (95% CI 38–89%),
@@ -197,7 +204,7 @@ gpt-5.4). Part of that may be API variance; it was not separated out.
 
 **Known weak spots:** (1) a few valid desk questions are still refused on mini (escalation, "may I
 paste a card number / Aadhaar into the copilot?"), and gpt-5.4 without the re-check refused H05 in 2
-of 3 runs; (2) fee-reversal drafting depends on the LLM's route choice (S08b fails on both models);
+of 3 runs; (2) fee-reversal drafting still depends on the LLM's route choice (22/24 held-out probes on mini, D58);
 (3) mini's intent label flips on some notes (S09) even where code still produces the right outcome;
 (4) gpt-5.4-nano, used for query rewrite and the borderline prompt-injection judge, is deprecated
 and needs replacing; (5) the final demo configuration's scope numbers come from the attempt-3 run,

@@ -1,0 +1,63 @@
+{
+ "gpt-5.4-mini": {
+  "action_probes_routed_action": "22/24",
+  "no_action_probes_routed_rag_or_tools": "21/24",
+  "b77_fee_route_mix": {
+   "rag": 25,
+   "tools": 13,
+   "refuse": 2
+  },
+  "misses": [
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   }
+  ],
+  "b77_action_examples": []
+ },
+ "gpt-5.4": {
+  "action_probes_routed_action": "24/24",
+  "no_action_probes_routed_rag_or_tools": "24/24",
+  "b77_fee_route_mix": {
+   "rag": 26,
+   "tools": 12,
+   "action": 2
+  },
+  "misses": [],
+  "b77_action_examples": [
+   "im not sure what this charge is for",
+   "I do not remember purchasing anything for 1£, and it is on my statement. Can you please tell me what that is about?"
+  ]
+ }
+}
