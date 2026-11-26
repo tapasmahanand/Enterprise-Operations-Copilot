@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: kestrel
+          POSTGRES_PASSWORD: kestrel
+          POSTGRES_DB: kestrel
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kestrel" --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      TEST_ADMIN_DATABASE_URL: postgresql://kestrel:kestrel@localhost:5432/kestrel
+      NATS_VERSION: "2.10.22"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Install nats-server (the JetStream tests start a real broker)
+        run: |
+          curl -fsSL "https://github.com/nats-io/nats-server/releases/download/v${NATS_VERSION}/nats-server-v${NATS_VERSION}-linux-amd64.tar.gz" | tar xz
+          sudo mv "nats-server-v${NATS_VERSION}-linux-amd64/nats-server" /usr/local/bin/
+          nats-server --version
+      - name: Tests (unit and database; no API keys, fake LLM)
+        run: pytest -q -m "db or not db" -rs --junitxml=pytest.xml
+      - name: Fail if anything was skipped
+        # A skipped database or broker test would turn the run green without testing it.
+        run: |
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("pytest.xml").getroot()
+          s = root if root.tag == "testsuite" else root.find("testsuite")
+          skipped = int(s.get("skipped", 0))
+          print(f"tests={s.get('tests')} skipped={skipped}")
+          raise SystemExit(1 if skipped else 0)
+          PY
