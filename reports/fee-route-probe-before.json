@@ -1,0 +1,428 @@
+{
+ "gpt-5.4-mini": {
+  "action_probes_routed_action": "0/24",
+  "no_action_probes_routed_rag_or_tools": "21/24",
+  "b77_fee_route_mix": {
+   "rag": 26,
+   "tools": 13,
+   "refuse": 1
+  },
+  "misses": [
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "no_action",
+    "text": "Customer noticed a ₹590 debit on her statement and doesn't know what it is.",
+    "intent": "card_payment_not_recognised",
+    "route": "action",
+    "action": "chargeback"
+   },
+   {
+    "kind": "no_action",
+    "text": "Customer noticed a ₹590 debit on her statement and doesn't know what it is.",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   }
+  ],
+  "b77_action_examples": []
+ },
+ "gpt-5.4": {
+  "action_probes_routed_action": "0/24",
+  "no_action_probes_routed_rag_or_tools": "18/24",
+  "b77_fee_route_mix": {
+   "rag": 23,
+   "tools": 15,
+   "action": 2
+  },
+  "misses": [
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it.",
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed.",
+    "intent": "cash_withdrawal_charge",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned.",
+    "intent": "transfer_fee_charged",
+    "route": "rag",
+    "action": "none"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "action",
+    "text": "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed.",
+    "intent": "extra_charge_on_statement",
+    "route": "tools",
+    "action": "fee_reversal"
+   },
+   {
+    "kind": "no_action",
+    "text": "Customer noticed a ₹590 debit on her statement and doesn't know what it is.",
+    "intent": "card_payment_not_recognised",
+    "route": "action",
+    "action": "chargeback"
+   },
+   {
+    "kind": "no_action",
+    "text": "Customer noticed a ₹590 debit on her statement and doesn't know what it is.",
+    "intent": "card_payment_not_recognised",
+    "route": "action",
+    "action": "card_block"
+   },
+   {
+    "kind": "no_action",
+    "text": "Customer noticed a ₹590 debit on her statement and doesn't know what it is.",
+    "intent": "card_payment_not_recognised",
+    "route": "action",
+    "action": "chargeback"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   },
+   {
+    "kind": "no_action",
+    "text": "How many free withdrawals at other banks' ATMs does a savings customer get each month?",
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "action": "none"
+   }
+  ],
+  "b77_action_examples": [
+   "im not sure what this charge is for",
+   "I do not remember purchasing anything for 1£, and it is on my statement. Can you please tell me what that is about?"
+  ]
+ }
+}

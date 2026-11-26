@@ -1,0 +1,24 @@
+# Held-out routing probes for fee complaints (D58). Written before the S08b router fix and never
+# tuned on: the fix was judged on these, not on S08b. Supervisor decision only (no DB, no draft).
+# action: a reversal ground from KB-POL-FEES (charged in error, or a bank-side failure) is stated
+# and the customer wants the fee back -> route=action, proposed_action=fee_reversal.
+# no_action: explain a valid fee, a policy question, a goodwill/discretionary waiver, or an
+# unexplained charge -> route rag or tools, and no fee_reversal.
+action:
+  - "Customer says she was charged ₹236 for a replacement card she never asked for; we reissued it ourselves after a data leak. Wants the fee taken off."
+  - "₹590 cheque return fee on account A1001, but the cheque only bounced because our system put a wrong hold on her funds. She wants the fee back."
+  - "Card was declined at the shop terminal yet he still got a ₹23 fee on card ending 1093. Please reverse it."
+  - "SMS alert charge of ₹15 showed up on her statement even though SMS alerts are free. Customer is asking for that charge to be refunded."
+  - "Customer's premium account has free ATM withdrawals at every bank, but she was billed ₹23 twice this week. Wants both fees reversed."
+  - "He was charged a 3.5% foreign currency markup on a rupee payment to an Indian merchant. That's wrong, he wants the markup refunded."
+  - "A ₹25 transfer fee was applied to an IMPS that failed and came back to her account. Customer wants the fee returned."
+  - "Annual card fee of ₹236 debited although the customer closed that card last year. He wants it reversed."
+no_action:
+  - "Customer is asking why she was charged ₹23 for using an SBI ATM."
+  - "What fees apply when a customer uses another bank's ATM?"
+  - "Is there a charge for a replacement debit card?"
+  - "Customer is upset about the 3.5% markup on her Dubai card purchases, says it's far too high."
+  - "Can a tier-1 agent reverse a fee, or does that need approval?"
+  - "Customer noticed a ₹590 debit on her statement and doesn't know what it is."
+  - "Customer wants the ₹236 annual fee waived because she hardly uses the card."
+  - "How many free withdrawals at other banks' ATMs does a savings customer get each month?"
