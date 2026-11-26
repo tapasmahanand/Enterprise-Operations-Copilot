@@ -4,6 +4,7 @@ title: Card Block SOP
 document_type: sop
 department: cards
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2024-11-01
 status: current
 ---

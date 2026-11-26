@@ -4,6 +4,7 @@ title: Complaint Escalation and Grievance Redressal
 document_type: sop
 department: customer_experience
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-01-01
 status: current
 ---

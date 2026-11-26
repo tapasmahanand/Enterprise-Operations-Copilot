@@ -32,8 +32,8 @@ def test_non_luhn_card_length_number_is_still_fully_masked():
     assert r.text == "card XXXX-4821" and r.found == {"card_unverified": 1}
 
 
-def test_secret_flags_compromise():
-    assert mask_pii("the pin is 1234").secret_shared
+def test_secret_value_is_flagged_present():
+    assert mask_pii("the pin is 1234").secret_present
 
 
 def test_has_unmasked_pii():

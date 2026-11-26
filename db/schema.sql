@@ -248,3 +248,121 @@ CREATE TABLE IF NOT EXISTS mock_chargebacks (
     status          TEXT NOT NULL DEFAULT 'filed',
     filed_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Authentication and audit (D50-D52) ------------------------------------------------
+-- Who did something comes only from a server-side session created at login, never from
+-- the client. Supervisors map to an org_directory person (no FK: the mock-data reseed
+-- truncates org_directory with CASCADE and must not wipe the users).
+CREATE TABLE IF NOT EXISTS app_users (
+    user_id         TEXT PRIMARY KEY,
+    display_name    TEXT NOT NULL,
+    role            TEXT NOT NULL CHECK (role IN ('agent', 'supervisor', 'compliance')),
+    person_id       TEXT,                         -- org_directory person: sets the approval tier
+    password_hash   TEXT NOT NULL,                -- scrypt$N$r$p$salt$hash
+    active          BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (role <> 'supervisor' OR person_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash      TEXT PRIMARY KEY,             -- sha256 of the token; the token itself is never stored
+    user_id         TEXT NOT NULL REFERENCES app_users(user_id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at      TIMESTAMPTZ NOT NULL,
+    revoked_at      TIMESTAMPTZ
+);
+
+-- Append-only: rows can be inserted, never changed or removed (trigger below). This stops
+-- the application and anyone using its code paths; it does not stop the database owner,
+-- who can drop the trigger (see README, "What is still unprotected").
+CREATE TABLE IF NOT EXISTS audit_log (
+    audit_id        BIGSERIAL PRIMARY KEY,
+    at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor_user_id   TEXT,                         -- NULL for failed logins and system actions
+    actor_role      TEXT,
+    actor_person_id TEXT,
+    action          TEXT NOT NULL,                -- login | login_failed | chat | draft_submitted | approval_decided | ...
+    object_type     TEXT NOT NULL,
+    object_id       TEXT,
+    detail          JSONB NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS audit_log_object ON audit_log (object_type, object_id);
+
+CREATE OR REPLACE FUNCTION audit_log_append_only() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_log is append-only (% blocked)', TG_OP;
+END $$;
+DROP TRIGGER IF EXISTS audit_log_no_update ON audit_log;
+CREATE TRIGGER audit_log_no_update BEFORE UPDATE OR DELETE ON audit_log
+    FOR EACH ROW EXECUTE FUNCTION audit_log_append_only();
+DROP TRIGGER IF EXISTS audit_log_no_truncate ON audit_log;
+CREATE TRIGGER audit_log_no_truncate BEFORE TRUNCATE ON audit_log
+    FOR EACH STATEMENT EXECUTE FUNCTION audit_log_append_only();
+
+-- Who created, submitted and decided each item (the authenticated user id).
+ALTER TABLE chat_runs ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE chat_runs ADD COLUMN IF NOT EXISTS idv_level INT;   -- as attested by user_id (D51)
+ALTER TABLE drafts    ADD COLUMN IF NOT EXISTS created_by TEXT;
+ALTER TABLE cases     ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS decided_by TEXT;
+
+-- Document access control (D54) ---------------------------------------------------
+-- audience: groups allowed to read a document (front-matter, required). Copied onto every
+-- chunk so the permission filter sits in the same WHERE as the vector ranking. The default
+-- is empty, which matches nobody: a database ingested before D54 returns no chunks until
+-- ingest runs again (fail closed, not open).
+ALTER TABLE documents       ADD COLUMN IF NOT EXISTS audience TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS audience TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS document_chunks_audience ON document_chunks USING gin (audience);
+
+-- Server-side group memberships. A user's groups are all_staff plus these rows; nothing a
+-- client sends can add one.
+CREATE TABLE IF NOT EXISTS user_groups (
+    user_id         TEXT NOT NULL REFERENCES app_users(user_id),
+    group_name      TEXT NOT NULL,
+    PRIMARY KEY (user_id, group_name)
+);
+
+-- Transactional outbox and bound approvals (D55) ------------------------------------
+-- A decision and the event that triggers its execution are committed together: either
+-- both exist or neither does. Execution happens later, from the outbox, and can be retried.
+CREATE TABLE IF NOT EXISTS outbox (
+    event_id        TEXT PRIMARY KEY,             -- deterministic, e.g. EVT-APR-1A2B-granted
+    event_type      TEXT NOT NULL,                -- ApprovalGranted | ApprovalRejected | CreditPosted
+    aggregate_id    TEXT NOT NULL,                -- case_id
+    payload         JSONB NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    published_at    TIMESTAMPTZ,                  -- handed on (dispatched, or acked by the broker)
+    attempts        INT NOT NULL DEFAULT 0,
+    claimed_until   TIMESTAMPTZ,                  -- lease, so two dispatchers don't take one event
+    last_error      TEXT
+);
+CREATE INDEX IF NOT EXISTS outbox_unpublished ON outbox (created_at) WHERE published_at IS NULL;
+
+-- What the supervisor approved, frozen at decision time. Execution refuses to post if the
+-- case, the draft or its version no longer match.
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_txn_id        TEXT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_amount_inr    INT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_draft_version INT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_action_hash   TEXT;
+
+-- Any change to a draft's action bumps its version (nothing edits drafts today; this makes
+-- a future edit path unable to slip a different amount under an existing approval).
+ALTER TABLE drafts ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 1;
+CREATE OR REPLACE FUNCTION drafts_bump_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.action IS DISTINCT FROM OLD.action THEN NEW.version := OLD.version + 1; END IF;
+    RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS drafts_version ON drafts;
+CREATE TRIGGER drafts_version BEFORE UPDATE ON drafts FOR EACH ROW EXECUTE FUNCTION drafts_bump_version();
+
+-- Ledger receipts: one per idempotency key (credit:<approval_id>). Written in the same
+-- transaction as the credit and the case update, so a replay finds it and posts nothing.
+CREATE TABLE IF NOT EXISTS ledger_receipts (
+    idempotency_key TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL,
+    credit_id       TEXT NOT NULL,
+    response        JSONB NOT NULL,
+    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);

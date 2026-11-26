@@ -1,5 +1,15 @@
 """Vector search over document_chunks with metadata filters.
 
+Access control (D54): every search takes the reader's Principal, and the permission test
+(`c.audience && groups`) is in the same WHERE clause as the status and transaction-date
+filters, ahead of the ORDER BY on vector distance. A chunk the reader may not see is never
+ranked into the LIMIT and never leaves Postgres. There is no default: a caller that forgets
+the principal gets a TypeError, not an unfiltered search.
+
+Caveat: with the HNSW index, pgvector applies WHERE filters to the index's candidate list
+(ef_search, 40 by default), so a very selective filter can return fewer than k rows. That
+loses recall, never leaks. On this 30-document corpus the planner scans the table anyway.
+
 Milestone 1 provides plain vector search; hybrid search (full-text + vector with rank
 fusion) is added for the retrieval ablation in Milestone 4.
 """
@@ -11,6 +21,8 @@ from datetime import date
 from typing import Any
 
 import psycopg
+
+from kestrel.access import Principal
 
 
 @dataclass
@@ -28,14 +40,15 @@ def vector_search(
     conn: psycopg.Connection,
     query_vec: list[float],
     *,
+    principal: Principal,
     k: int = 5,
     include_superseded: bool = False,
     departments: list[str] | None = None,
     document_types: list[str] | None = None,
     txn_date: date | None = None,
 ) -> list[Hit]:
-    where = ["TRUE"]
-    params: dict[str, Any] = {"q": query_vec, "k": k}
+    params: dict[str, Any] = {"q": query_vec, "k": k, "groups": sorted(principal.groups)}
+    where = ["c.audience && %(groups)s::text[]"]
     if not include_superseded:
         where.append("c.metadata->>'status' = 'current'")
     if departments:
@@ -60,8 +73,10 @@ def vector_search(
     return [Hit(r[0], r[1], r[2], r[3], float(r[4]), r[5], r[6]) for r in rows]
 
 
-def _filters(include_superseded: bool, txn_date: date | None, params: dict[str, Any]) -> list[str]:
-    where = ["TRUE"]
+def _filters(principal: Principal, include_superseded: bool, txn_date: date | None,
+             params: dict[str, Any]) -> list[str]:
+    params["groups"] = sorted(principal.groups)
+    where = ["c.audience && %(groups)s::text[]"]
     if not include_superseded:
         where.append("c.metadata->>'status' = 'current'")
     if txn_date:
@@ -76,6 +91,7 @@ def hybrid_search(
     query_vec: list[float],
     query_text: str,
     *,
+    principal: Principal,
     k: int = 5,
     include_superseded: bool = False,
     txn_date: date | None = None,
@@ -88,7 +104,7 @@ def hybrid_search(
     production keeps vector search, see reports/eval.md for why."""
     params: dict[str, Any] = {"q": query_vec, "pool": pool,
                               "t": " OR ".join(w for w in query_text.replace('"', " ").split() if len(w) > 2)}
-    where = " AND ".join(_filters(include_superseded, txn_date, params))
+    where = " AND ".join(_filters(principal, include_superseded, txn_date, params))
     sql = f"""
         WITH v AS (
             SELECT c.chunk_id, row_number() OVER (ORDER BY c.embedding <=> %(q)s::vector) AS r

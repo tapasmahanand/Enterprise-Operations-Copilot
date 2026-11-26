@@ -39,11 +39,26 @@
 <body>
 <header>
   <h1>Kestrel Resolution Copilot</h1>
-  <nav class="tabs"><button id="tab-agent" class="on">Agent console</button><button id="tab-sup">Supervisor queue</button></nav>
+  <nav class="tabs hidden" id="tabs"><button id="tab-agent" class="on">Agent console</button><button id="tab-sup">Supervisor queue</button><button id="tab-audit">Audit log</button></nav>
   <span class="muted" id="health"></span>
+  <span style="margin-left:auto" class="row hidden" id="whobox"><span class="muted">Signed in as <b id="who"></b></span><button class="ghost" id="logout">Sign out</button></span>
 </header>
 <main>
-  <section id="agent">
+  <section id="login" class="hidden">
+    <div class="card" style="max-width:380px;margin:40px auto">
+      <h2>Sign in</h2>
+      <form id="login-form">
+        <div style="margin:8px 0"><label class="muted">Username<br><input id="lu" autocomplete="username" style="width:100%;padding:6px" required></label></div>
+        <div style="margin:8px 0"><label class="muted">Password<br><input id="lp" type="password" autocomplete="current-password" style="width:100%;padding:6px" required></label></div>
+        <button class="primary" type="submit">Sign in</button> <span class="muted" id="lmsg"></span>
+      </form>
+      <div class="muted" style="margin-top:12px">Demo users: <span class="mono">agent1</span>, <span class="mono">agent2</span> (agents);
+        <span class="mono">ananya</span> (team lead), <span class="mono">farah</span> (ops manager), <span class="mono">rohan</span> (regional ops head);
+        <span class="mono">compliance1</span>. Password: see README.</div>
+    </div>
+  </section>
+
+  <section id="agent" class="hidden">
     <div class="grid">
       <div>
         <div class="card">
@@ -75,13 +90,19 @@
   <section id="sup" class="hidden">
     <div class="card">
       <div class="row"><h2 style="margin:0">Pending approvals, most urgent first</h2>
-        <span class="muted">Acting as</span>
-        <select id="approver"><option value="P01">Ananya Rao · team lead</option><option value="P03">Farah Qureshi · ops manager</option><option value="P04">Rohan Iyer · regional ops head</option></select>
+        <span class="muted">Approving as <b id="approver"></b> (from your sign-in)</span>
         <button class="ghost" id="refresh">Refresh</button></div>
       <table id="queue"><thead><tr><th>Case</th><th>Action</th><th>Due (RBI)</th><th>Approver tier</th><th>Evidence</th><th></th></tr></thead><tbody></tbody></table>
       <div class="muted" id="qmsg"></div>
     </div>
     <div class="card hidden" id="decided"><h2>Last decision</h2><div id="decided-body"></div></div>
+  </section>
+
+  <section id="audit" class="hidden">
+    <div class="card">
+      <div class="row"><h2 style="margin:0">Audit log, newest first (append-only)</h2><button class="ghost" id="audit-refresh">Refresh</button></div>
+      <table id="audit-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Object</th><th>Detail</th></tr></thead><tbody></tbody></table>
+    </div>
   </section>
 </main>
 <script>
@@ -90,18 +111,59 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&l
 const inr = (n) => "₹" + Number(n).toLocaleString("en-IN");
 let session = null, draftId = null, caseId = null, pollTimer = null;
 
+let me = null;
+const TABS = ["agent", "sup", "audit"];
 function tab(which) {
-  $("agent").classList.toggle("hidden", which !== "agent"); $("sup").classList.toggle("hidden", which !== "sup");
-  $("tab-agent").classList.toggle("on", which === "agent"); $("tab-sup").classList.toggle("on", which === "sup");
+  TABS.forEach(t => { $(t).classList.toggle("hidden", which !== t); $("tab-" + t).classList.toggle("on", which === t); });
   if (which === "sup") loadQueue();
+  if (which === "audit") loadAudit();
 }
-$("tab-agent").onclick = () => tab("agent"); $("tab-sup").onclick = () => tab("sup");
+TABS.forEach(t => $("tab-" + t).onclick = () => tab(t));
 
-async function api(path, opts = {}, role = "agent") {
-  const r = await fetch(path, { ...opts, headers: { "content-type": "application/json", "X-Role": role, ...(opts.headers || {}) } });
+// Who you are comes from the server session (HttpOnly cookie set at sign-in). The page
+// never sends a role or approver id; the server reads both from your user record.
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "content-type": "application/json", ...(opts.headers || {}) } });
   const body = await r.json().catch(() => ({}));
+  if (r.status === 401 && path !== "/auth/login") showLogin("Your session ended. Sign in again.");
   return { status: r.status, body };
 }
+
+function showLogin(msg) {
+  me = null; ["agent", "sup", "audit"].forEach(t => $(t).classList.add("hidden"));
+  $("tabs").classList.add("hidden"); $("whobox").classList.add("hidden");
+  $("login").classList.remove("hidden"); $("lmsg").textContent = msg || "";
+}
+
+function signedIn(u) {
+  me = u; $("login").classList.add("hidden"); $("tabs").classList.remove("hidden"); $("whobox").classList.remove("hidden");
+  const tier = u.approver_role ? " · " + u.approver_role.replace(/_/g, " ") : "";
+  $("who").textContent = `${u.display_name} (${u.role}${tier})`;
+  $("approver").textContent = u.display_name + tier;
+  const can = { agent: u.role === "agent" || u.role === "supervisor", sup: u.role === "supervisor", audit: u.role !== "agent" };
+  TABS.forEach(t => $("tab-" + t).classList.toggle("hidden", !can[t]));
+  tab(can.agent ? "agent" : "audit");
+}
+
+$("login-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const { status, body } = await api("/auth/login", { method: "POST", body: JSON.stringify({ username: $("lu").value, password: $("lp").value }) });
+  $("lp").value = "";
+  if (status === 200) signedIn(body.user); else $("lmsg").textContent = body.detail || "Sign-in failed";
+};
+$("logout").onclick = async () => { await api("/auth/logout", { method: "POST" }); session = null; showLogin("Signed out."); };
+api("/auth/me").then(({ status, body }) => status === 200 ? signedIn(body) : showLogin());
+
+async function loadAudit() {
+  const { status, body } = await api("/audit?limit=100");
+  const tb = $("audit-table").querySelector("tbody");
+  if (status !== 200) { tb.innerHTML = `<tr><td colspan="5">${esc(JSON.stringify(body))}</td></tr>`; return; }
+  tb.innerHTML = body.map(a => `<tr><td class="muted">${esc(String(a.at).replace("T", " ").slice(0, 19))}</td>
+    <td>${esc(a.actor || "—")}<div class="muted">${esc(a.actor_role || "")}${a.actor_person_id ? " · " + esc(a.actor_person_id) : ""}</div></td>
+    <td class="mono">${esc(a.action)}</td><td class="mono">${esc(a.object_type)} ${esc(a.object_id || "")}</td>
+    <td class="muted mono" style="max-width:360px;overflow-wrap:anywhere">${esc(JSON.stringify(a.detail))}</td></tr>`).join("");
+}
+$("audit-refresh").onclick = loadAudit;
 
 fetch("/health").then(r => r.json()).then(h => {
   const kb = h.checks.knowledge_base || {};
@@ -159,6 +221,8 @@ function showFinal(d) {
   if (d.script) { $("script-card").classList.remove("hidden"); $("script").textContent = d.script; }
   const f = [];
   if (d.card_block && d.card_block.error) f.push(`<div><span class="pill bad">card not blocked</span> <span class="muted">${esc(d.card_block.error)}</span></div>`);
+  if (d.no_draft_reason && !d.draft && /^bank lookup failed/.test(d.no_draft_reason))
+    f.push(`<div><span class="pill bad">bank connector</span> <span class="muted">${esc(d.no_draft_reason)}</span></div>`);
   if (d.refusal) f.push(`<div style="margin-top:6px"><span class="pill bad">${esc(d.refusal.rule_id)}</span> <span class="muted">${esc(d.refusal.reason)}</span></div>`);
   if (d.card_block && d.card_block.status) f.push(`<div><span class="pill ok">card ${esc(d.card_block.last4)} blocked</span> <span class="muted">${esc(d.card_block.blocked_at || "")}</span></div>`);
   if (d.calc) f.push(`<div style="margin-top:6px">Customer liability <b>${inr(d.calc.customer_liability_inr)}</b> · bank ${inr(d.calc.bank_liability_inr)}</div>
@@ -189,7 +253,7 @@ async function loadTrace(path, lfUrl) {
 }
 
 async function loadQueue() {
-  const { status, body } = await api("/approvals?state=pending", {}, "supervisor");
+  const { status, body } = await api("/approvals?state=pending");
   const tb = $("queue").querySelector("tbody");
   if (status !== 200) { $("qmsg").textContent = JSON.stringify(body); return; }
   $("qmsg").textContent = body.length ? "" : "Nothing waiting.";
@@ -202,16 +266,27 @@ async function loadQueue() {
       <td><div class="row"><button class="primary" data-a="${esc(a.approval_id)}" data-d="approve">Approve</button>
       <button class="ghost" data-a="${esc(a.approval_id)}" data-d="reject">Reject</button></div></td></tr>`;
   }).join("");
-  tb.querySelectorAll("button").forEach(b => b.onclick = () => decide(b.dataset.a, b.dataset.d));
+  const shown = Object.fromEntries(body.map(a => [a.approval_id, { expected_txn_id: a.action.txn_id,
+    expected_amount_inr: a.action.amount_inr, expected_draft_version: a.draft_version ?? undefined }]));
+  tb.querySelectorAll("button").forEach(b => b.onclick = () => decide(b.dataset.a, b.dataset.d, shown[b.dataset.a]));
 }
 $("refresh").onclick = loadQueue;
 
-async function decide(id, decision) {
+async function decide(id, decision, shown) {
   let reason = decision === "approve" ? "evidence reviewed" : prompt("Reason for rejection?");
   if (decision === "reject" && !reason) return;
-  const { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason, approver_id: $("approver").value }) }, "supervisor");
+  // What this screen showed goes with the decision, so a changed case is refused, not approved (D55).
+  let { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason, ...(shown || {}) }) });
   $("decided").classList.remove("hidden");
   if (status === 200) {
+    // With the event service (D56) the decision returns at once and a consumer executes it:
+    // poll the case until it leaves the queue states.
+    let tries = 0;
+    while (["pending_approval", "approved"].includes(body.status) && body.approval?.state !== "pending" && tries++ < 20) {
+      $("decided-body").innerHTML = `<span class="mono">${esc(body.case_id)}</span> <span class="pill warn">${esc(body.approval.state)}, executing</span>`;
+      await new Promise(r => setTimeout(r, 1000));
+      body = (await api(`/cases/${body.case_id}`)).body;
+    }
     const n = body.result && body.result.notification ? body.result.notification.body : "";
     const cr = body.result && body.result.credit ? `credit ${esc(body.result.credit.credit_id)} posted ${inr(body.result.credit.amount_inr)}` : "";
     $("decided-body").innerHTML = `<span class="mono">${esc(body.case_id)}</span> <span class="pill ${body.status === "closed" ? "ok" : "bad"}">${esc(body.status)}</span> ${cr}<div class="muted">${esc(n)}</div>`;

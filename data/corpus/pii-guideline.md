@@ -4,6 +4,7 @@ title: Handling Personal and Sensitive Data
 document_type: guideline
 department: compliance
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-05-01
 status: current
 ---

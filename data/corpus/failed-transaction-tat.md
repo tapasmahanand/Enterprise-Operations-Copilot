@@ -4,6 +4,7 @@ title: Failed Transactions — Turnaround Time and Customer Compensation
 document_type: policy
 department: payments_ops
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2024-07-01
 status: current
 rbi_reference: RBI/2019-20/67, DPSS.CO.PD No.629/02.01.014/2019-20 (20 September 2019)

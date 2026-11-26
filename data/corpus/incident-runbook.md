@@ -4,6 +4,7 @@ title: Resolution Desk Incident Runbook (Systems Unavailable)
 document_type: runbook
 department: operations
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-09-01
 status: current
 ---

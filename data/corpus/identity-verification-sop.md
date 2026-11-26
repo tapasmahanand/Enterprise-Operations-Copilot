@@ -4,6 +4,7 @@ title: Identity Verification SOP for Phone Banking
 document_type: sop
 department: contact_centre
 sensitivity: restricted
+audience: [all_staff]
 effective_from: 2025-02-01
 status: current
 ---

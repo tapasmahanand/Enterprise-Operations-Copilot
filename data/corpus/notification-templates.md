@@ -4,6 +4,7 @@ title: Customer Notification Templates
 document_type: script
 department: customer_experience
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-03-01
 status: current
 ---

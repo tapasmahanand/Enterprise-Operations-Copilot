@@ -41,6 +41,9 @@ x-app-env: &app-env
   LANGFUSE_SECRET_KEY: sk-lf-kestrel-demo
   # Shell value, else .env, else production (D49). `make up-demo` sets demo.
   MODEL_PROFILE: ${MODEL_PROFILE:-production}
+  # Approvals are executed by the events service from NATS JetStream (D56). Unset it to fall
+  # back to in-process outbox dispatch by the app and worker (D55).
+  NATS_URL: nats://nats:4222
 
 services:
   postgres:
@@ -84,6 +87,30 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
       interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Outbox relay -> JetStream, durable consumers (case executor, notifier), reconcile (D56).
+  events:
+    build: .
+    command: ["python", "-m", "kestrel.events.run"]
+    env_file: .env
+    environment: *app-env
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8222/healthz"]
+      interval: 3s
       timeout: 3s
       retries: 20
 
@@ -177,6 +204,7 @@ services:
 
 volumes:
   pgdata:
+  natsdata:
   clickhouse:
   blobs:
 

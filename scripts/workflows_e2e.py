@@ -20,6 +20,8 @@ import time
 
 import httpx
 
+from _login import APPROVER_FOR_TIER, as_user, settle
+
 # One credit per transaction (D38): workflow 2 refunds T2002, so a rerun needs that credit gone.
 RESET = os.environ.get("KESTREL_E2E_RESET", "docker compose exec -T postgres psql -q -U kestrel -d kestrel "
                        "-c \"DELETE FROM mock_credits WHERE txn_id = 'T2002'\"")
@@ -28,6 +30,7 @@ if RESET:
 
 c = httpx.Client(base_url="http://localhost:8000", timeout=90)
 results: list[tuple[str, bool, str]] = []
+AGENT, COMPLIANCE = as_user(c, "agent1"), as_user(c, "compliance1")
 
 
 def check(name: str, ok: bool, info: str = "") -> None:
@@ -36,9 +39,10 @@ def check(name: str, ok: bool, info: str = "") -> None:
 
 
 def chat(msg: str, idv: int = 2, session: str | None = None) -> dict:
-    r = c.post("/chat", json={"message": msg, "idv_level": idv, **({"session_id": session} if session else {})}).json()
+    r = c.post("/chat", json={"message": msg, "idv_level": idv, **({"session_id": session} if session else {})},
+               headers=AGENT).json()
     out: dict = {"progress": [], "tokens": "", "session_id": r["session_id"], "run_id": r["run_id"]}
-    with c.stream("GET", r["stream"]) as s:
+    with c.stream("GET", r["stream"], headers=AGENT) as s:
         for line in s.iter_lines():
             if line.startswith("data: "):
                 ev = json.loads(line[6:])
@@ -67,41 +71,46 @@ check("2 Tools: duplicate found, refund drafted from the record",
       d.get("kind") == "refund" and d.get("amount_inr") == 4999 and d.get("duplicate_of") == "T2001", str(d.get("txn_id")))
 
 # 3 Approval HITL
-case = c.post(f"/drafts/{d['draft_id']}/submit", headers={"X-Role": "agent"}).json() if d else {}
-q = c.get("/approvals", headers={"X-Role": "supervisor"}).json()
+case = c.post(f"/drafts/{d['draft_id']}/submit", headers=AGENT).json() if d else {}
+q = c.get("/approvals", headers=as_user(c, "ananya")).json()
 item = next((x for x in q if x["case_id"] == case.get("case_id")), None)
 check("3 HITL: case waits in the supervisor queue", item is not None and case.get("status") == "pending_approval")
-forbidden = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "agent"}, json={"decision": "approve"})
+forbidden = c.post(f"/approvals/{item['approval_id']}", headers=AGENT, json={"decision": "approve"})
 check("3 HITL: an agent cannot approve", forbidden.status_code == 403)
+spoof = c.post(f"/approvals/{item['approval_id']}", headers=as_user(c, "ananya"),
+               json={"decision": "approve", "reason": "x", "approver_id": "P04"})
+check("3 HITL: a client-chosen approver id is rejected", spoof.status_code == 422)
 # The approver must match the tier the matrix chose (a repeat dispute moves it up one).
-approver = {"team_lead": "P01", "ops_manager": "P03", "regional_ops_head": "P04"}[item["approver_role"]]
-if approver != "P01":
-    low = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-                 json={"decision": "approve", "reason": "x", "approver_id": "P01"})
+approver = APPROVER_FOR_TIER[item["approver_role"]]
+if approver != "ananya":
+    low = c.post(f"/approvals/{item['approval_id']}", headers=as_user(c, "ananya"),
+                 json={"decision": "approve", "reason": "x"})
     check("3 HITL: a team lead cannot approve above their tier", low.status_code == 403)
-ok = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-            json={"decision": "approve", "reason": "duplicate confirmed", "approver_id": approver})
-credit_id = ((ok.json().get("result") or {}).get("credit") or {}).get("credit_id") if ok.status_code == 200 else None
+SUP = as_user(c, approver)
+ok = c.post(f"/approvals/{item['approval_id']}", headers=SUP,
+            json={"decision": "approve", "reason": "duplicate confirmed"})
+okb = settle(c, SUP, ok.json()) if ok.status_code == 200 else {}
+credit_id = ((okb.get("result") or {}).get("credit") or {}).get("credit_id")
 check("3 HITL: approve resumes the case and posts the credit",
-      ok.status_code == 200 and ok.json()["status"] == "closed" and bool(credit_id), credit_id or "")
-dup = c.post(f"/approvals/{item['approval_id']}", headers={"X-Role": "supervisor"},
-             json={"decision": "approve", "reason": "again", "approver_id": approver})
+      ok.status_code == 200 and okb.get("status") == "closed" and bool(credit_id), credit_id or "")
+dup = c.post(f"/approvals/{item['approval_id']}", headers=SUP,
+             json={"decision": "approve", "reason": "again"})
 check("3 HITL: duplicate decision is 409", dup.status_code == 409)
 
 # 4 Async
 t0 = time.perf_counter()
-job = c.post("/jobs", headers={"X-Role": "compliance"}, json={"job_type": "enron_compliance_scan", "payload": {}})
+job = c.post("/jobs", headers=COMPLIANCE, json={"job_type": "enron_compliance_scan", "payload": {}})
 ms = (time.perf_counter() - t0) * 1000
 check("4 Async: 202 with a job id, immediately", job.status_code == 202 and ms < 1000, f"{ms:.0f} ms")
 jid = job.json()["job_id"]
 for _ in range(60):
-    j = c.get(f"/jobs/{jid}").json()
+    j = c.get(f"/jobs/{jid}", headers=COMPLIANCE).json()
     if j["state"] in ("done", "failed"):
         break
     time.sleep(1)
 check("4 Async: worker finished the scan", j["state"] == "done",
       f"{(j.get('result') or {}).get('scanned')} scanned, {(j.get('result') or {}).get('flagged_messages')} flagged")
-bad = c.post("/jobs", headers={"X-Role": "agent"}, json={"job_type": "enron_compliance_scan"})
+bad = c.post("/jobs", headers=AGENT, json={"job_type": "enron_compliance_scan"})
 check("4 Async: only compliance can start a scan", bad.status_code == 403)
 
 # 5 Guardrailed

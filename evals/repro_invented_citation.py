@@ -7,6 +7,8 @@ retrieved (and get withheld by the output check)?
 
 from __future__ import annotations
 
+from kestrel.access import TIER1
+
 import re
 import sys
 import uuid
@@ -41,7 +43,7 @@ def trial(n: int, with_fix: bool, drop: str | None = None) -> dict:
                 conn.execute("UPDATE mock_cards SET status = 'active'"); conn.commit()
             session = f"S-REPRO-{uuid.uuid4().hex[:6]}"
             raw, final = [], None
-            for ev in stream_run(f"REPRO-{uuid.uuid4().hex[:8]}", session, hero, None, 2):
+            for ev in stream_run(f"REPRO-{uuid.uuid4().hex[:8]}", session, hero, None, 2, principal=TIER1):
                 if ev["type"] == "token":
                     raw.append(ev["text"])
                 elif ev["type"] == "final":

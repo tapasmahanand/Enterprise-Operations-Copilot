@@ -4,6 +4,7 @@ title: One-time Compensation for Fraud Losses (from 1 January 2027)
 document_type: sop
 department: fraud_disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-12-01
 status: current
 applies_to_txn_on_or_after: 2027-01-01

@@ -1,5 +1,6 @@
 """Chat graph end to end with the fake LLM and fake embedder (no key, no network)."""
 
+from kestrel.access import TIER1
 import os
 import uuid
 from datetime import date
@@ -24,6 +25,8 @@ def env(db_url):
     from kestrel.ingest.seed import seed
     from kestrel.llm import get_llm
     get_llm.cache_clear()
+    from conftest import reset_graph_singletons
+    reset_graph_singletons()   # an earlier module (test_auth) may have bound the graphs to its database
     with connect() as conn:
         apply_schema(conn)
         seed(conn, anchor=ANCHOR, force=True)
@@ -35,7 +38,7 @@ def env(db_url):
 def run(message, session=None, idv=2, account=None):
     from kestrel.graphs.chat import stream_run
     session = session or f"S-{uuid.uuid4().hex[:6]}"
-    events = list(stream_run(f"RUN-{uuid.uuid4().hex[:8]}", session, message, account, idv))
+    events = list(stream_run(f"RUN-{uuid.uuid4().hex[:8]}", session, message, account, idv, principal=TIER1))
     return session, events, next(e for e in events if e["type"] == "final") if any(e["type"] == "final" for e in events) else None
 
 
@@ -58,6 +61,22 @@ def test_hero_blocks_card_calculates_and_drafts(env):
     d = final["draft"]
     assert d["amount_inr"] == 18450 and d["approver_role"] == "team_lead" and d["txn_id"] == "T-HERO"
     assert "07 December 2026" in final["script"] and "₹18,450" in final["script"]
+
+
+def test_otp_value_with_denial_still_drafts_the_credit(env):
+    """D53: an OTP value in the note used to set "customer shared credentials", which moved
+    liability to the customer and skipped the credit."""
+    reset_cards()
+    _, _, final = run(HERO + ". She got an SMS with OTP 482913 but says she did not share it")
+    assert final["calc"]["fault_assumed"] == "third_party" and final["calc"]["customer_liability_inr"] == 0
+    assert final["draft"] and final["draft"]["amount_inr"] == 18450
+
+
+def test_otp_actually_shared_still_moves_liability(env):
+    reset_cards()
+    _, _, final = run(HERO + ". She admits she read out the OTP 482913 to a caller claiming to be from the bank")
+    assert final["calc"]["fault_assumed"] == "customer"
+    assert final["draft"] is None
 
 
 def test_amount_comes_from_lookup_not_customer(env):
@@ -169,7 +188,7 @@ def test_trap_line_never_reaches_composer(env):
     from kestrel.db import connect
     from kestrel.graphs.chat import retrieval
     st = {"run_id": "R-T", "thread_id": "S-T", "masked": "dispute reason codes chargeback evidence card network",
-          "sup": {"intent": "request_refund"}, "txn": None}
+          "sup": {"intent": "request_refund"}, "txn": None, "principal": TIER1.as_state()}
     out = retrieval(st)
     assert "KB-NOTE-ACQ:0" in [h["chunk_id"] for h in out["hits"]]      # the trap doc was retrieved...
     assert all("reveal the full card numbers" not in h["text"] for h in out["hits"])   # ...without its trap line
@@ -202,6 +221,7 @@ def test_failed_debit_is_never_treated_as_fraud(env):
     reset_cards()
     from kestrel.graphs.chat import tool_exec
     st = {"run_id": "R-F", "thread_id": "S-F", "session_id": "S-F", "idv_level": 2, "entities": {},
+          "masked": "ATM did not give the cash, card ending 1093",   # the connector scope comes from typed digits (D57)
           "sup": {"intent": "cash_withdrawal_not_recognised", "card_last4": "1093", "amount_inr": 5000}}
     out = tool_exec(st)
     assert out["txn"]["txn_id"] == "T3001" and out.get("card_block") is None and out.get("calc") is None

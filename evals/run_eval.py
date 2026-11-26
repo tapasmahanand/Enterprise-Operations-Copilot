@@ -12,6 +12,8 @@ Needs Postgres and OPENAI_API_KEY (real models; there is no point evaluating the
 
 from __future__ import annotations
 
+from kestrel.access import TIER1
+
 import argparse
 import csv
 import json
@@ -101,7 +103,7 @@ def run_scenario(sc: dict, judge: bool) -> dict:
     t0 = time.perf_counter()
     first_token = None
     raw, final, events = [], None, []
-    for ev in stream_run(run_id, session, sc["note"], sc.get("account"), sc.get("idv", 0)):
+    for ev in stream_run(run_id, session, sc["note"], sc.get("account"), sc.get("idv", 0), principal=TIER1):
         events.append(ev)
         if ev["type"] == "token":
             first_token = first_token or time.perf_counter() - t0
@@ -197,7 +199,7 @@ def routing_sample(n_total: int, seed: int = 20261125) -> list[dict]:
 def run_routing(sample: list[dict], model: str) -> dict:
     from kestrel.graphs.chat import SUPERVISOR_SYSTEM, _intent_list, _kb_topics
     from kestrel.llm import SupervisorDecision, get_llm
-    system = SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics())
+    system = SUPERVISOR_SYSTEM.format(intents=_intent_list(), kb_topics=_kb_topics(TIER1))
 
     def one(s):
         t0 = time.perf_counter()

@@ -1,14 +1,16 @@
 """Run the hero chat N times and report output-check failures and latency (chat only)."""
 import json, statistics, sys, time
 import httpx
+from _login import as_user
 HERO = "Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, it went through yesterday."
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 10
 c = httpx.Client(base_url="http://localhost:8000", timeout=60)
+agent = as_user(c, "agent1")
 lat, blocked = [], []
 for i in range(n):
-    run = c.post("/chat", json={"message": HERO, "idv_level": 2}).json()
+    run = c.post("/chat", json={"message": HERO, "idv_level": 2}, headers=agent).json()
     final = done = None
-    with c.stream("GET", run["stream"]) as r:
+    with c.stream("GET", run["stream"], headers=agent) as r:
         for line in r.iter_lines():
             if line.startswith("data: "):
                 ev = json.loads(line[6:])

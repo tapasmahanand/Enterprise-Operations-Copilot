@@ -4,6 +4,7 @@ title: Case Documentation and Audit Trail Standard
 document_type: guideline
 department: compliance
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-08-01
 status: current
 ---

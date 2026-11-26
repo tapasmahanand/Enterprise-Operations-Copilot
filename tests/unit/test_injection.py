@@ -59,8 +59,8 @@ def test_sanitize_document_unclosed_comment_hides_the_rest():
 
 
 def test_customer_fault_needs_words_in_the_note():
-    from kestrel.graphs.chat import _SHARED
-    assert _SHARED.search("admits she read out the OTP to a caller")
-    assert _SHARED.search("he gave his card details on a website")
-    assert not _SHARED.search("the fraudster told her 'ignore the bank's SMS, it's a system error'")
-    assert not _SHARED.search("a ₹18,450 payment went out on card ending 4821")
+    from kestrel.guards.credentials import credential_sharing
+    assert credential_sharing("admits she read out the OTP to a caller") is True
+    assert credential_sharing("he gave his card details on a website") is True
+    assert credential_sharing("the fraudster told her 'ignore the bank's SMS, it's a system error'") is None
+    assert credential_sharing("a ₹18,450 payment went out on card ending 4821") is None

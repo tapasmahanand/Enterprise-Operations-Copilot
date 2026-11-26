@@ -22,7 +22,9 @@ class MaskResult:
     text: str
     found: dict[str, int] = field(default_factory=dict)
     card_last4: list[str] = field(default_factory=list)
-    secret_shared: bool = False          # OTP/PIN/CVV read out: treat card as compromised
+    # An OTP/PIN/CVV value was in the text (and is now masked). This says nothing about whether the
+    # customer shared it with anyone: guards/credentials.py decides that from the words (D53).
+    secret_present: bool = False
 
     @property
     def verdict(self) -> str:
@@ -46,7 +48,7 @@ def mask_pii(text: str) -> MaskResult:
         r.found[kind] = r.found.get(kind, 0) + 1
 
     def secret(m: re.Match) -> str:
-        bump("secret"); r.secret_shared = True
+        bump("secret"); r.secret_present = True
         return f"{m.group(1)}{m.group(2)}[REDACTED]"
 
     def card(m: re.Match) -> str:

@@ -4,6 +4,7 @@ title: Resolution Desk Organisation and Escalation Contacts
 document_type: directory
 department: operations
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-10-01
 status: current
 ---
