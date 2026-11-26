@@ -221,6 +221,7 @@ def test_failed_debit_is_never_treated_as_fraud(env):
     reset_cards()
     from kestrel.graphs.chat import tool_exec
     st = {"run_id": "R-F", "thread_id": "S-F", "session_id": "S-F", "idv_level": 2, "entities": {},
+          "masked": "ATM did not give the cash, card ending 1093",   # the connector scope comes from typed digits (D57)
           "sup": {"intent": "cash_withdrawal_not_recognised", "card_last4": "1093", "amount_inr": 5000}}
     out = tool_exec(st)
     assert out["txn"]["txn_id"] == "T3001" and out.get("card_block") is None and out.get("calc") is None

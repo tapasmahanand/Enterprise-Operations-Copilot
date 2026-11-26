@@ -54,6 +54,40 @@ Proof: `tests/integration/test_access_rag.py` makes the restricted `KB-FRAUD-PLA
 
 Limits: only one restricted document exists, so this is a mechanism, not a permission model; groups are seeded, with no admin UI; with an HNSW index pgvector filters the index's candidate list, so a very selective audience can return fewer than k chunks (lost recall, never a leak). Langfuse traces are visible to anyone with a Langfuse login and are not redacted.
 
+## Approvals: one transaction for the decision, one for the credit (D55)
+
+`POST /approvals/{id}` commits the decision, what it is bound to (transaction, amount, draft version, hash of the approved action) and an outbox event in **one** Postgres transaction. Executing it is driven by that event: the API dispatches it right after the commit, and if the API dies first, the worker (every second) or `reconcile()` at boot does. The credit, its ledger receipt, the case's new status and a `CreditPosted` event are a **second** single transaction keyed by the approval, so a replay reuses the receipt. Before posting, execution re-checks that the case and draft still match the approval and posts nothing if they don't.
+
+Proof (`tests/integration/test_outbox_recovery.py`, each step in its own process, crashes injected with `KESTREL_CRASH_AT`): killing the API after the approval commit leaves an unpublished event and no credit, and the next dispatch completes the case. Killing the worker after the credit commit, then replaying, leaves exactly one credit and one receipt, and the replay reports `reused_receipt`. A stale screen, a draft edited after submit, or a case altered after approval are refused. A case locked by another executor is retried, not doubled. The real-bank pattern (same idempotency key, look the key up after a timeout before retrying) is `ledger.post_remote_credit`. It is unit-tested against a fake bank and not wired to anything.
+
+Limits: chargebacks still file through their own idempotent write, not the single-transaction path.
+
+## Event-driven execution over NATS JetStream (D56)
+
+In compose, `NATS_URL` is set: the API returns as soon as the decision commits, the `events` service relays outbox rows to JetStream, and two durable consumers do the work. `case-executor` resumes the case graph and posts the credit, and `notifier` handles `CreditPosted` by drafting the SMS and closing the case. Each acks only after its writes commit. The console polls the case after a decision. A reconcile loop finishes cases whose events were published but never consumed. `GET /ops/events` (supervisor or compliance) shows unpublished outbox rows, the age of the oldest, and approval-to-post latency (p50/p95/max). Unset `NATS_URL` to fall back to in-process dispatch.
+
+Proof (`tests/integration/test_events_nats.py`, a real `nats-server`, with the events service in its own process; skipped if `nats-server` is not installed):
+- Three approvals made while the broker is stopped wait in the outbox, with no credits and lag above 0. After the broker restarts, the backlog drains to 3 credits, 3 receipts, 3 SMS and 3 closed cases.
+- Every event re-published with fresh message ids, so the broker's duplicate filter can't help, still leaves 3 and 3.
+- An executor killed after the credit commit but before its ack is redelivered to the restarted service, and ends with one credit and one SMS.
+
+Limits: single broker node, no TLS or auth on NATS. While the broker is down, reconcile does not bypass it (cases wait). The compose `nats` and `events` services were not started in this sandbox (Docker Hub rate limit), and the tests ran against a downloaded `nats-server` 2.10.22 binary.
+
+## Read-only bank connector over MCP (D57)
+
+`transaction_lookup` and `ticket_lookup` run in a read-only MCP server (`python -m kestrel.connectors.mcp_server`). It has typed inputs and outputs and publishes an output schema. The chat graph's tool node calls it over stdio through one long-lived session. Every call carries an HMAC-signed scope built from the session: the account on the agent's screen, card digits the agent actually typed, and entities from earlier in the call. The connector refuses lookups outside that scope and filters its results to it, so a card number the model invents is refused. A connector timeout (5 s, `MCP_TOOL_TIMEOUT_S`) or crash returns "bank lookup failed …; nothing was drafted", and the console shows it. Credit posting is not in the connector; it stays in the approval worker. `TOOL_TRANSPORT=direct` skips MCP.
+
+Proof (`tests/integration/test_mcp_connector.py`):
+- An MCP client discovers exactly the two tools, both marked read-only and both with output schemas, and invokes both.
+- Out-of-scope account, card and ticket lookups are refused, as are forged and expired scopes.
+- If the model supplies a card the agent didn't type, the connector refuses it.
+- The hero case runs through the connector.
+- With the connector hanging, the run ends in about 1 s with no draft, no card block and a clear reason, and the next call gets a fresh connector.
+
+Measured locally: about 1 s once, to start the connector, then about 13 ms per lookup against 10 ms direct.
+
+Limits: stdio only. Authenticated Streamable HTTP for a separate deployment is described but not built. The scope key is per process for stdio. A real deployment needs a managed key and short TTLs, and today's TTL is 120 s.
+
 ## Hero demo (unauthorised ₹18,450 card payment)
 
 Sign in as `agent1`. In the UI: press **Ask copilot** (the sample text is pre-filled), then **Send to supervisor**, restart the app, sign in as `ananya` (or `farah` if the case needs an ops manager), open **Supervisor queue** and **Approve**.

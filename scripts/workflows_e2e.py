@@ -20,7 +20,7 @@ import time
 
 import httpx
 
-from _login import APPROVER_FOR_TIER, as_user
+from _login import APPROVER_FOR_TIER, as_user, settle
 
 # One credit per transaction (D38): workflow 2 refunds T2002, so a rerun needs that credit gone.
 RESET = os.environ.get("KESTREL_E2E_RESET", "docker compose exec -T postgres psql -q -U kestrel -d kestrel "
@@ -89,9 +89,10 @@ if approver != "ananya":
 SUP = as_user(c, approver)
 ok = c.post(f"/approvals/{item['approval_id']}", headers=SUP,
             json={"decision": "approve", "reason": "duplicate confirmed"})
-credit_id = ((ok.json().get("result") or {}).get("credit") or {}).get("credit_id") if ok.status_code == 200 else None
+okb = settle(c, SUP, ok.json()) if ok.status_code == 200 else {}
+credit_id = ((okb.get("result") or {}).get("credit") or {}).get("credit_id")
 check("3 HITL: approve resumes the case and posts the credit",
-      ok.status_code == 200 and ok.json()["status"] == "closed" and bool(credit_id), credit_id or "")
+      ok.status_code == 200 and okb.get("status") == "closed" and bool(credit_id), credit_id or "")
 dup = c.post(f"/approvals/{item['approval_id']}", headers=SUP,
              json={"decision": "approve", "reason": "again"})
 check("3 HITL: duplicate decision is 409", dup.status_code == 409)
