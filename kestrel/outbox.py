@@ -68,9 +68,9 @@ def mark_published(event_id: str) -> None:
         conn.commit()
 
 
-def mark_failed(event_id: str, attempts: int, error: str) -> None:
-    """Keep it unpublished; push the lease out with exponential backoff."""
-    delay = min(MAX_BACKOFF_S, 2 ** min(attempts, 8))
+def mark_failed(event_id: str, attempts: int, error: str, delay_s: float | None = None) -> None:
+    """Keep it unpublished; push the lease out with exponential backoff (or `delay_s`)."""
+    delay = delay_s if delay_s is not None else min(MAX_BACKOFF_S, 2 ** min(attempts, 8))
     with connect() as conn:
         conn.execute("""UPDATE outbox SET last_error = %s, claimed_until = now() + make_interval(secs => %s)
                         WHERE event_id = %s""", (error[:1000], delay, event_id))
@@ -85,10 +85,9 @@ Handler = Callable[[dict[str, Any]], Any]
 
 
 def handlers() -> dict[str, Handler]:
-    from kestrel.graphs.case import handle_decision_event
+    from kestrel.graphs.case import handle_decision_event, notify_credit_posted
     return {"ApprovalGranted": handle_decision_event, "ApprovalRejected": handle_decision_event,
-            # The case graph drafts the notification itself until step 3 moves it to a consumer.
-            "CreditPosted": lambda payload: None}
+            "CreditPosted": notify_credit_posted}
 
 
 def dispatch(ev: dict[str, Any]) -> bool:
@@ -110,13 +109,25 @@ def dispatch(ev: dict[str, Any]) -> bool:
 
 
 def dispatch_due(limit: int = 20, event_id: str | None = None) -> dict[str, int]:
+    """In-process delivery (no broker). Follows on to the events a handler produced (a
+    decision's CreditPosted), so one call finishes a case when nothing fails."""
     done = failed = 0
     for ev in claim(limit, event_id):
         if dispatch(ev):
             done += 1
+            if ev["event_type"] == "ApprovalGranted":
+                follow = dispatch_due(1, event_id_for(ev["payload"]["approval_id"], "credit-posted"))
+                done += follow["dispatched"]; failed += follow["failed"]
         else:
             failed += 1
     return {"dispatched": done, "failed": failed}
+
+
+def bus_mode() -> str:
+    """'nats' when NATS_URL is set: events are published to JetStream and consumed there, and
+    nobody dispatches in-process. Otherwise 'postgres': the API and worker dispatch (D56)."""
+    import os
+    return "nats" if os.environ.get("NATS_URL") else "postgres"
 
 
 def oldest_unpublished_age_s() -> float | None:

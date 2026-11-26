@@ -92,13 +92,10 @@ def test_api_killed_after_approval_commit_completes_after_recovery(db):
     assert counts(db, cid) == {"credits": 0, "receipts": 0, "notifications": 0, "status": "pending_approval",
                                "unpublished": 1}
     # Recovery: the worker (or reconcile at boot) dispatches the committed event.
-    assert py(db, DISPATCH)["dispatched"] == 1
-    c = counts(db, cid)
-    assert (c["credits"], c["receipts"], c["notifications"], c["status"]) == (1, 1, 1, "closed")
-    # The credit transaction added CreditPosted; the next pass hands it on (a no-op until step 3).
-    assert c["unpublished"] == 1
-    py(db, DISPATCH)
-    assert counts(db, cid)["unpublished"] == 0
+    # ApprovalGranted, then the CreditPosted it produced (the notifier closes the case).
+    assert py(db, DISPATCH)["dispatched"] == 2
+    assert counts(db, cid) == {"credits": 1, "receipts": 1, "notifications": 1, "status": "closed",
+                               "unpublished": 0}
 
 
 def test_worker_killed_after_credit_write_replays_with_one_credit(db):

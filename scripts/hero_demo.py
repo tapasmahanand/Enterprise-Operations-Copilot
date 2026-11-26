@@ -16,7 +16,7 @@ import time
 
 import httpx
 
-from _login import APPROVER_FOR_TIER, as_user
+from _login import APPROVER_FOR_TIER, as_user, settle
 
 HERO = ("Customer says there is a ₹18,450 card payment she never made on card 4111 1111 1111 4821, "
         "it went through yesterday.")
@@ -94,7 +94,7 @@ def main() -> None:
     sup = as_user(c, approver)
     res = c.post(f"/approvals/{item['approval_id']}", headers=sup,
                  json={"decision": "approve", "reason": "evidence reviewed"})
-    body = res.json()
+    body = settle(c, sup, res.json()) if res.status_code == 200 else res.json()
     check(res.status_code == 200 and body["status"] == "closed",
           f"supervisor ({approver}) approved; case graph resumed and closed"
           + ("" if res.status_code == 200 and body.get("status") == "closed" else f" -> {res.status_code} {body}"))

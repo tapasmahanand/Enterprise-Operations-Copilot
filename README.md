@@ -60,7 +60,18 @@ Limits: only one restricted document exists, so this is a mechanism, not a permi
 
 Proof (`tests/integration/test_outbox_recovery.py`, each step in its own process, crashes injected with `KESTREL_CRASH_AT`): killing the API after the approval commit leaves an unpublished event and no credit, and the next dispatch completes the case. Killing the worker after the credit commit, then replaying, leaves exactly one credit and one receipt, and the replay reports `reused_receipt`. A stale screen, a draft edited after submit, or a case altered after approval are refused. A case locked by another executor is retried, not doubled. The real-bank pattern (same idempotency key, look the key up after a timeout before retrying) is `ledger.post_remote_credit`. It is unit-tested against a fake bank and not wired to anything.
 
-Limits: chargebacks still file through their own idempotent write, not the single-transaction path. The notification is still drafted inside the case graph (step 3 moves it to a consumer).
+Limits: chargebacks still file through their own idempotent write, not the single-transaction path.
+
+## Event-driven execution over NATS JetStream (D56)
+
+In compose, `NATS_URL` is set: the API returns as soon as the decision commits, the `events` service relays outbox rows to JetStream, and two durable consumers do the work. `case-executor` resumes the case graph and posts the credit, and `notifier` handles `CreditPosted` by drafting the SMS and closing the case. Each acks only after its writes commit. The console polls the case after a decision. A reconcile loop finishes cases whose events were published but never consumed. `GET /ops/events` (supervisor or compliance) shows unpublished outbox rows, the age of the oldest, and approval-to-post latency (p50/p95/max). Unset `NATS_URL` to fall back to in-process dispatch.
+
+Proof (`tests/integration/test_events_nats.py`, a real `nats-server`, with the events service in its own process; skipped if `nats-server` is not installed):
+- Three approvals made while the broker is stopped wait in the outbox, with no credits and lag above 0. After the broker restarts, the backlog drains to 3 credits, 3 receipts, 3 SMS and 3 closed cases.
+- Every event re-published with fresh message ids, so the broker's duplicate filter can't help, still leaves 3 and 3.
+- An executor killed after the credit commit but before its ack is redelivered to the restarted service, and ends with one credit and one SMS.
+
+Limits: single broker node, no TLS or auth on NATS. While the broker is down, reconcile does not bypass it (cases wait). The compose `nats` and `events` services were not started in this sandbox (Docker Hub rate limit), and the tests ran against a downloaded `nats-server` 2.10.22 binary.
 
 ## Hero demo (unauthorised ₹18,450 card payment)
 

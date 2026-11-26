@@ -57,8 +57,8 @@ def main() -> None:
             queue.enqueue("tat_sweep", {}, requested_by="scheduler", dedupe_key="tat_sweep:scheduled")
             next_sweep = time.time() + sweep_every
         # Outbox events the API didn't finish (it crashed, or inline dispatch is off) (D55).
-        try:
-            sent = outbox.dispatch_due()["dispatched"]
+        try:   # with a broker configured, the events service owns delivery (D56)
+            sent = outbox.dispatch_due()["dispatched"] if outbox.bus_mode() == "postgres" else 0
         except Exception:  # noqa: BLE001 - keep the job loop alive if Postgres blips
             log.exception("outbox dispatch failed")
             sent = 0

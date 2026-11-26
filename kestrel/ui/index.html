@@ -274,9 +274,17 @@ async function decide(id, decision, shown) {
   let reason = decision === "approve" ? "evidence reviewed" : prompt("Reason for rejection?");
   if (decision === "reject" && !reason) return;
   // What this screen showed goes with the decision, so a changed case is refused, not approved (D55).
-  const { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason, ...(shown || {}) }) });
+  let { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason, ...(shown || {}) }) });
   $("decided").classList.remove("hidden");
   if (status === 200) {
+    // With the event service (D56) the decision returns at once and a consumer executes it:
+    // poll the case until it leaves the queue states.
+    let tries = 0;
+    while (["pending_approval", "approved"].includes(body.status) && body.approval?.state !== "pending" && tries++ < 20) {
+      $("decided-body").innerHTML = `<span class="mono">${esc(body.case_id)}</span> <span class="pill warn">${esc(body.approval.state)}, executing</span>`;
+      await new Promise(r => setTimeout(r, 1000));
+      body = (await api(`/cases/${body.case_id}`)).body;
+    }
     const n = body.result && body.result.notification ? body.result.notification.body : "";
     const cr = body.result && body.result.credit ? `credit ${esc(body.result.credit.credit_id)} posted ${inr(body.result.credit.amount_inr)}` : "";
     $("decided-body").innerHTML = `<span class="mono">${esc(body.case_id)}</span> <span class="pill ${body.status === "closed" ? "ok" : "bad"}">${esc(body.status)}</span> ${cr}<div class="muted">${esc(n)}</div>`;
