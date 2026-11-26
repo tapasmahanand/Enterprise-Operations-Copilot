@@ -146,12 +146,13 @@ def notify_credit_posted(payload: dict) -> dict:
     if not res.ok:
         raise RuntimeError(f"notification for {cid} failed: {res.error}")   # retried by the dispatcher
     with connect() as conn:
-        conn.execute("""UPDATE cases SET status = 'closed', updated_at = now(),
+        closed = conn.execute("""UPDATE cases SET status = 'closed', updated_at = now(),
                                result = COALESCE(result, '{}'::jsonb) || %s
-                        WHERE case_id = %s AND status = 'approved'""", (Jsonb({"notification": res.data}), cid))
+                        WHERE case_id = %s AND status = 'approved'""", (Jsonb({"notification": res.data}), cid)).rowcount
         conn.commit()
-    record_event(cid, cid, "notify", "ok", int((time.perf_counter() - t0) * 1000),
-                 {"template": tpl, "event_id": payload.get("event_id"), "consumer": "notifier"})
+    if closed:   # a redelivered CreditPosted finds the case closed: no second trace row
+        record_event(cid, cid, "notifier", "ok", int((time.perf_counter() - t0) * 1000),
+                     {"template": tpl, "event_id": payload.get("event_id"), "consumer": "notifier"})
     return res.data
 
 
