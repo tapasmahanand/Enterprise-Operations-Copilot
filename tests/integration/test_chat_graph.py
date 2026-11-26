@@ -142,6 +142,16 @@ def test_no_draft_without_level_2_verification_but_card_still_blocked_at_level_1
     assert final["draft"] is None and final["refusal"]["rule_id"] == "KB-REF-1"
 
 
+def test_kb_ref_1_is_a_hold_that_still_answers_from_policy(env):
+    """D60: a duplicate charge below level 2 records KB-REF-1 and drafts nothing, but the agent still gets
+    the policy (retrieval runs) instead of a bare refusal, and no account lookup runs."""
+    _, events, final = run("Customer says she was charged twice at Urban Threads on card ending 7710", idv=1)
+    assert final["draft"] is None and final["refusal"]["rule_id"] == "KB-REF-1"
+    assert not any(e["type"] == "draft" for e in events)
+    assert final["citations"], "the held answer should cite policy"
+    assert not final.get("tool_calls")
+
+
 def test_card_not_blocked_when_caller_unverified(env):
     reset_cards()
     _, _, final = run(HERO, idv=0)
