@@ -23,6 +23,27 @@ _NEGATED = re.compile(r"(\b(not|never|cannot|can't|can’t|don't|don’t|won't|w
                       r"(\s+\w+){0,3}|\bno)\s*$", re.I)   # "no" only directly before: "no guarantee"
 
 
+# D61: the answer says (or scripts for the customer) that the request is already with a supervisor.
+# Untrue when the agent reads it: a draft is submitted only when the agent clicks "Send to supervisor".
+# Eval run 7: "I've raised a request to credit the duplicate amount" (KB-SCRIPT-REFUND, quoted before
+# the click), "the credit has been sent for approval". Measured in the eval; not a withholding rule.
+_PREMATURE = re.compile(
+    r"\b(i|we|you)(['’]ve|\s+have)\s+(now\s+|already\s+)?(raised|sent|submitted|escalated|forwarded)\b"
+    r"|\b(has|have)\s+(now\s+|already\s+)?been\s+(raised|sent|submitted|escalated|forwarded)\b"
+    r"|\b(is|are)\s+(now\s+)?(with|awaiting|pending)\s+(my |the |your )?(supervisor|approval)", re.I)
+
+
+def premature_submission(answer: str) -> re.Match | None:
+    """First claim that the request is already submitted, unless negated in the same clause
+    ("nothing has been sent", "has not been raised")."""
+    for m in _PREMATURE.finditer(answer):
+        before = re.split(r"[.;:!?\n]", answer[max(0, m.start() - 60):m.start()])[-1]
+        if not (_NEGATED.search(before) or re.search(r"\bnothing\b", before, re.I)
+                or re.search(r"\bnot\b", m.group(0), re.I)):
+            return m
+    return None
+
+
 def _unnegated_promise(answer: str) -> re.Match | None:
     for m in _PROMISE.finditer(answer):
         before = answer[max(0, m.start() - 60):m.start()]

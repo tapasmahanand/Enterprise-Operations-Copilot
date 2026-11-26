@@ -1,0 +1,568 @@
+{
+ "prod": {
+  "composed": 24,
+  "with_draft": 21,
+  "premature": 2,
+  "runs": [
+   {
+    "id": "O01",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-8675F332 in the side panel and click \u201cSend to supervisor.\u201d A genuine duplicate is confirmed, and credits need supervisor approval [KB-POL-DUP:0]. For the customer, you can say: \u201cI can see two payments of \u20b94,999 to Urban Threads Phoenix Mall on 2026-11-21. It needs my supervisor\u2019s approval, and you\u2019ll get an SMS within 24 hours.\u201d [KB-SCRIPT-REFUND:0]"
+   },
+   {
+    "id": "O02",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-09761909 in the side panel, then click \u201cSend to supervisor.\u201d This is a confirmed duplicate charge, so the draft credit for the duplicated amount is the right path, but all credits need supervisor approval and tier depends on amount [KB-POL-DUP:0]. Do not promise the refund as final [KB-POL-DUP:0]."
+   },
+   {
+    "id": "O03",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the duplicate payment is confirmed, and use the script: \u201cI can see two payments of \u20b94,999 to Urban Threads Phoenix Mall on 2026-11-21.\u201d The refund is not final yet; credits need supervisor approval and you must not promise the outcome [KB-POL-DUP:0][KB-SCRIPT-REFUND:0][KB-POL-REFUND:0]. Review draft DRF-95E3B89E in the side panel and click \u201cSend to supervisor.\u201d"
+   },
+   {
+    "id": "O04",
+    "repeat": 0,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "I couldn\u2019t find policy for this."
+   },
+   {
+    "id": "O05",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the bank liability calculator shows zero customer liability for this card payment and the bank liability is \u20b918,450, with a shadow credit due by 2026-12-07; do not promise the credit as final because any credit needs supervisor approval [KB-POL-LIAB-A:0][KB-POL-LIAB-A:1]. The card ending 4821 is already blocked, and under the third-party breach rule reported within 1 working day after the alert, zero liability applies [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "O06",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the card ending 4821 is now blocked, and say the calculator shows \u20b90 customer liability and \u20b918,450 bank liability for this transaction [KB-POL-LIAB-A:1]. Review draft DRF-48EB7B85 in the side panel and click \u201cSend to supervisor\u201d; it needs team_lead approval and nothing is submitted yet [KB-POL-LIAB-A:1]. We still need to confirm whether any OTP, PIN, or card details were shared, since that affects liability [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "O07",
+    "repeat": 0,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-560F77D4 for the \u20b923 ATM fee on card ending 4821 and click \u201cSend to supervisor\u201d; every fee reversal needs supervisor approval and you must not promise a reversal before approval [KB-POL-FEES:0]. The fee can be reversed if it was charged in error, such as a free-limit ATM withdrawal charged as paid [KB-POL-FEES:0]."
+   },
+   {
+    "id": "O08",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the card ending 9034 is now blocked, and explain that the calculator shows \u20b90 customer liability and \u20b964,000 bank liability under the R17 regime [KB-POL-LIAB-A:1]. Review draft DRF-2E741F98 for the \u20b964,000 shadow credit and click \u201cSend to supervisor\u201d; no credit is final until approved [KB-POL-LIAB-A:1], and the burden of proving customer liability lies with the bank [KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O01",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-6949093B for \u20b94,999 on T2002 and click \u201cSend to supervisor\u201d; it\u2019s a confirmed duplicate charge on card ending 7710. For confirmed duplicate charges, a credit for the duplicate amount needs supervisor approval and you must not promise the credit itself [KB-POL-DUP:0][KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O02",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-2B5008BF for \u20b94,999 in the side panel, then click \"Send to supervisor\"; all credits need supervisor approval [KB-POL-DUP:0] [KB-POL-REFUND:0]. This is a confirmed duplicate charge, so the draft amount comes from the transaction record, not the customer\u2019s description [KB-POL-DUP:0]."
+   },
+   {
+    "id": "O03",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-35BADDBE in the side panel and click \u201cSend to supervisor\u201d; it\u2019s for \u20b94,999 and needs team_lead approval [KB-POL-DUP:0]. For a confirmed duplicate, the policy script says the duplicate amount is credited only with supervisor approval, and you must not promise the credit itself [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O04",
+    "repeat": 1,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "I can\u2019t confirm a duplicate or draft a credit from this call because the 7710 transaction lookup is out of scope, so there\u2019s nothing drafted and no proof both debits were posted. If you can verify two posted debits to Urban Threads for the same amount within 24 hours, the duplicate-credit request needs supervisor approval and we must not promise the credit itself [KB-POL-DUP:0]."
+   },
+   {
+    "id": "O05",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "The calculator shows zero customer liability under the third-party breach outcome, and the card ending 4821 is already blocked [KB-POL-LIAB-A:0]. Tell the customer Kestrel may bear the loss, but any credit needs team_lead approval and you should review draft DRF-259E0EFE and click \u201cSend to supervisor\u201d [KB-POL-LIAB-A:1][KB-POL-LIAB-A:0]. Mention liability is still subject to confirming whether they shared OTP/PIN/card details [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "O06",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the card ending 4821 has already been blocked, and that the case is in the liability process for an unauthorised card-not-present transaction. Review draft DRF-CC3A9730 for the \u20b918,450 shadow credit and click \u201cSend to supervisor\u201d; nothing is submitted until you do, and any credit still needs supervisor approval [KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O07",
+    "repeat": 1,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-6E7C1645 for the \u20b923 ATM fee on card ending 4821 and click \u201cSend to supervisor\u201d; it\u2019s a fee reversal and needs supervisor approval [KB-POL-FEES:0]. Don\u2019t promise the refund is done yet, and nothing is submitted until you send it. The fee can be reversed if it was charged in error, such as a free-limit ATM withdrawal charged as paid [KB-POL-FEES:0]."
+   },
+   {
+    "id": "O08",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Block is already done, so next review the draft DRF-3DE2F30D in the side panel and click \u201cSend to supervisor\u201d; nothing is submitted until then. For an unauthorised card payment before 1 January 2027, the bank bears the loss here, shadow credit is within 10 working days, and resolution within 90 days; the burden of proving customer liability lies with the bank [KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O01",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": "I've raised",
+    "answer": "Review draft DRF-73FC9373 for \u20b94,999 and click \u201cSend to supervisor\u201d; it\u2019s a confirmed duplicate on card ending 7710, but nothing is submitted until you do. For a confirmed duplicate charge, the credit needs supervisor approval and the customer script is: \u201cI've raised a request to credit the duplicate amount. It needs my supervisor's approval, and you'll get an SMS within 24 hours.\u201d [KB-POL-DUP:0] [KB-SCRIPT-REFUND:0]"
+   },
+   {
+    "id": "O02",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": "I\u2019ve raised",
+    "answer": "Review draft DRF-A631A495 in the side panel and click \u201cSend to supervisor.\u201d This is a confirmed duplicate charge, so the duplicate amount can be credited from the transaction record, but it still needs supervisor approval [KB-POL-DUP:0]. You can tell the customer: \u201cI\u2019ve raised a request to credit the duplicate amount. It needs my supervisor\u2019s approval, and you\u2019ll get an SMS within 24 hours.\u201d [KB-SCRIPT-REFUND:0]"
+   },
+   {
+    "id": "O03",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "I can see two posted payments of \u20b94,999 to Urban Threads Phoenix Mall on 2026-11-21. It\u2019s a confirmed duplicate, so review draft DRF-F00A1D9B in the side panel and click \u201cSend to supervisor\u201d; the credit needs supervisor approval [KB-POL-DUP:0]. Do not promise the refund itself, and the customer script is that duplicate-charge credits usually get an SMS within 24 hours once approved [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O04",
+    "repeat": 2,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "I couldn\u2019t find policy for this."
+   },
+   {
+    "id": "O05",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the card ending 4821 is blocked, and based on the calculator this falls under the unauthorised transaction liability policy: customer liability is \u20b90 and bank liability is \u20b918,450, with shadow credit due by 2026-12-07 and resolution due by 2027-02-22 [KB-POL-LIAB-A:1]. Review draft DRF-BA7AB81E in the side panel and click \u201cSend to supervisor\u201d; any credit needs supervisor approval and you must not promise the outcome as final [KB-POL-LIAB-A:1][KB-POL-REFUND:0]."
+   },
+   {
+    "id": "O06",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "The card ending 4821 is already blocked, and the draft DRF-EE79B839 is prepared for a \u20b918,450 shadow credit; review it in the side panel and click \u201cSend to supervisor.\u201d Under the R17 regime, the calculator shows customer liability \u20b90, bank liability \u20b918,450, with shadow credit due by 2026-12-07 and resolution due by 2027-02-22 [KB-POL-LIAB-A:1]. I can\u2019t promise any outcome, and the customer\u2019s liability may still depend on whether OTP/PIN/card details were shared [KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O07",
+    "repeat": 2,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review the draft DRF-FE2B1DA5 for the \u20b923 ATM fee on card ending 4821 and click \u201cSend to supervisor.\u201d This looks like a fee charged in error, and fee reversals need supervisor approval; do not promise the reversal as done yet [KB-POL-FEES:0]."
+   },
+   {
+    "id": "O08",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the card ending 9034 is blocked, and explain only the calculator result: zero liability for the customer and \u20b964,000 bank liability under the R17 regime, with shadow credit due by 2026-12-07 and resolution due by 2027-02-22; the burden of proving customer liability lies with the bank [KB-POL-LIAB-A:1]. Review draft DRF-8276DC1E in the side panel and click \u201cSend to supervisor\u201d; the draft needs regional ops head approval and nothing is submitted until you do."
+   }
+  ]
+ },
+ "big": {
+  "composed": 24,
+  "with_draft": 21,
+  "premature": 0,
+  "runs": [
+   {
+    "id": "O01",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-5157708D for a \u20b94,999 credit on the duplicate Urban Threads charge and, if correct, click \"Send to supervisor\"; nothing is submitted until you do. This is a confirmed duplicate charge under KB-POL-DUP / rule KB-POL-DUP, and duplicate credits must use the transaction amount and need supervisor approval [KB-POL-DUP:0]. Do not promise the credit as final [KB-SCRIPT-REFUND:0][KB-POL-REFUND:0]."
+   },
+   {
+    "id": "O02",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-18556DD3 for the duplicate Urban Threads charge and, if it matches the posted duplicate on 2026-11-21 for card ending 7710, click \"Send to supervisor.\" A genuine duplicate charge can be credited for the duplicated amount from the transaction record, and all credits need supervisor approval [KB-POL-DUP:0]. Do not promise the credit; use the statement amount \u20b94,999, not the customer\u2019s description [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O03",
+    "repeat": 0,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer it\u2019s a confirmed duplicate charge, and that any bank credit for the duplicate \u20b94,999 needs supervisor approval; do not promise the credit [KB-POL-DUP:0][KB-SCRIPT-REFUND:0]. Review draft DRF-B7CD5444 for \u20b94,999 and click \u201cSend to supervisor\u201d; nothing has been submitted until you do, and the draft needs team_lead approval per KB-MATRIX [KB-POL-DUP:0]."
+   },
+   {
+    "id": "O04",
+    "repeat": 0,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer you can\u2019t confirm any refund yet. First, verify on the statement whether there are two posted debits for the same amount to Urban Threads within 24 hours and whether one has already been refunded; pending duplicates usually drop off within 7 calendar days and need no action [KB-POL-DUP:0]. Don\u2019t promise a credit or use the customer\u2019s \u20b94,999 figure to confirm one; any bank credit would need supervisor approval and must use the amount from the transaction record [KB-POL-DUP:0] [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O05",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Confirm the card is already blocked, then ask whether she shared any OTP, PIN, or card details, because that is still unconfirmed and affects liability [KB-SCRIPT-FRAUD:0]. You can explain that for this unauthorised card-not-present transaction, the calculator shows \u20b90 customer liability under R17-6ii and a shadow credit of \u20b918,450 due by 2026-12-07, but any credit needs supervisor approval and you must not present it as final [KB-POL-LIAB-A:1][KB-SCRIPT-FRAUD:0]. Review draft DRF-7DD653D1 and click \u201cSend to supervisor\u201d; nothing is submitted until you do."
+   },
+   {
+    "id": "O06",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-7FB07781 and click \u201cSend to supervisor\u201d if everything is correct; nothing has been submitted yet. Card ending 4821 is already blocked, and for an unauthorised transaction you should explain liability only from the calculator: under R17-WD and R17-6ii the customer liability is \u20b90, with shadow credit due by 2026-12-07 and resolution due by 2027-02-22; don\u2019t promise the outcome before approval [KB-SCRIPT-FRAUD:0]. Also confirm whether they shared any OTP/PIN/card details, as that affects liability [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "O07",
+    "repeat": 0,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "[The drafted answer was withheld by the output check: unapproved promise: 'guaranteed'.]\n\nFacts from bank systems:\n- intent: cash_withdrawal_charge (route action)\n- transaction: T1003 on 2026-11-20, \u20b923 at Other-bank ATM fee, channel atm, card ending 4821\n- draft DRF-AB488F11: fee reversal of \u20b923, needs approval by team_lead (KB-MATRIX); not yet sent to supervisor\n- next step in the copilot: the agent reviews this draft in the side panel and clicks \"Send to supervisor\"; nothing is submitted until they do"
+   },
+   {
+    "id": "O08",
+    "repeat": 0,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Confirm the card ending 9034 is blocked, then ask whether she shared any OTP, PIN, or card details, because that is still unconfirmed and can affect liability [KB-SCRIPT-FRAUD:0]. The calculator currently shows zero customer liability under R17-6ii/R17-WD, with a \u20b964,000 shadow credit due by 2026-12-07 and resolution due by 2027-02-22; only quote those calculator outputs, and any credit still needs supervisor approval [KB-POL-LIAB-A:1]. Review draft DRF-D66A54D6 in the side panel and click \"Send to supervisor\"; nothing is submitted until you do."
+   },
+   {
+    "id": "O01",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-8E50830C for a credit of \u20b94,999 on the duplicate Urban Threads charge, then click \"Send to supervisor\"; nothing is submitted until you do. The duplicate is already confirmed for T2002/T2001, and for a genuine posted duplicate that is not yet refunded, the copilot drafts a credit for the duplicated amount taken from the transaction record; all credits need supervisor approval [KB-POL-DUP:0]."
+   },
+   {
+    "id": "O02",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-4AEA6871 for the duplicate charge on card ending 7710, then click \"Send to supervisor\"; nothing is submitted until you do. This is a confirmed duplicate charge under KB-POL-DUP, so the drafted credit is for \u20b94,999 from the transaction record, and any credit needs supervisor approval [KB-POL-DUP:0]. When speaking to the customer, use the statement amount/date and don\u2019t promise the credit as final [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O03",
+    "repeat": 1,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-E6E2724A for the duplicate Urban Threads charge on card ending 7710, then click \u201cSend to supervisor\u201d; nothing is submitted until you do. The duplicate is confirmed for \u20b94,999, and a credit for the duplicated amount needs supervisor approval at the team_lead tier under KB-MATRIX [KB-POL-DUP:0]. For timing, don\u2019t quote the 5\u20137 working day merchant-refund window here\u2014that applies to merchant-initiated refunds, not this bank credit workflow [KB-POL-REFUND:0]."
+   },
+   {
+    "id": "O04",
+    "repeat": 1,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer you can\u2019t confirm any refund on this call yet. To treat this as a duplicate charge, you first need to verify in-scope transaction history that there are two posted debits to the same merchant for the same amount within 24 hours and whether one has already been refunded [KB-POL-DUP:0]. No draft exists in this run because card ending 7710 is out of scope, so nothing has been prepared; also, do not promise any bank credit or refund because any such credit needs supervisor approval [KB-POL-DUP:0][KB-POL-REFUND:0]."
+   },
+   {
+    "id": "O05",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Confirm whether the customer shared any OTP, PIN, or card details, because that affects liability under the unauthorised-transactions policy [KB-POL-LIAB-A:0]. Then review draft DRF-3D0029E7 and, if accurate, click \u201cSend to supervisor\u201d; any credit needs supervisor approval [KB-POL-LIAB-A:1]. For this 2026-11-23 card-not-present transaction, the calculator shows zero customer liability under R17-6ii/R17-WD and a shadow credit of \u20b918,450 due by 2026-12-07, with resolution due by 2027-02-22 [KB-POL-LIAB-A:0][KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O06",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-D2BF8125 and click \u201cSend to supervisor\u201d; nothing has been submitted yet. The card ending 4821 is already blocked, and for an unauthorised transaction you should use the calculator result only: under R17-WD and R17-6ii the customer liability is \u20b90, with shadow credit \u20b918,450 due by 2026-12-07 and resolution due by 2027-02-22; any credit still needs supervisor approval [KB-POL-LIAB-A:1]. Also confirm whether they shared any OTP/PIN/card details, since that affects liability [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "O07",
+    "repeat": 1,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer the \u20b923 fee on T1003 dated 2026-11-20 can be considered for reversal if it was charged in error, such as a free-limit ATM withdrawal being treated as paid [KB-POL-FEES:0]. Review draft DRF-B5ACD38C, then click \"Send to supervisor\"; every fee reversal or bank-paid credit needs supervisor approval, so do not say it\u2019s done or promise the refund [KB-POL-FEES:0] [KB-POL-REFUND:0]."
+   },
+   {
+    "id": "O08",
+    "repeat": 1,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Confirm the card ending 9034 is blocked, then ask whether she shared any OTP, PIN, or card details; that still needs to be confirmed and can affect liability [KB-SCRIPT-FRAUD:0]. For this unauthorised card-not-present transaction, use the liability route, not chargeback [KB-SOP-CHARGEBACK:0]; the calculator shows \u20b90 customer liability under R17-6ii and a \u20b964,000 shadow credit due by 2026-12-07, with resolution due by 2027-02-22 [KB-POL-LIAB-A:1]. Review draft DRF-749E832F and click \"Send to supervisor\"; any credit needs supervisor approval [KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "O01",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-F7537529 and, if it matches the confirmed duplicate, click \u201cSend to supervisor\u201d; nothing is submitted until you do. This is a genuine duplicate charge under the duplicate-charge policy, so the drafted credit should be for \u20b94,999 taken from the transaction record, not from the customer\u2019s description, and all credits need supervisor approval [KB-POL-DUP:0]. If needed on call, use the statement figures for Urban Threads on 2026-11-21 [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O02",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-3DBC459C for card ending 7710 and, if correct, click \u201cSend to supervisor\u201d; nothing is submitted until you do. This is a confirmed duplicate charge on 2026-11-21 for \u20b94,999 at Urban Threads Phoenix Mall, so the draft amount should come from the transaction record, and all credits need supervisor approval [KB-POL-DUP:0]. If you need the call wording, use the duplicate-charge script and do not promise the credit as final [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O03",
+    "repeat": 2,
+    "draft": {
+     "kind": "refund",
+     "amount_inr": 4999,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-74EE12CD for the confirmed duplicate charge on card ending 7710, then click \u201cSend to supervisor\u201d; nothing has been submitted yet. For timing, this is a duplicate-charge credit workflow, not a merchant refund timeline: genuine duplicates are drafted for credit for the duplicated amount, and all credits need supervisor approval [KB-POL-DUP:0][KB-POL-REFUND:0]. You can use the duplicate-charge script in the approved customer script pane [KB-SCRIPT-REFUND:0]."
+   },
+   {
+    "id": "O04",
+    "repeat": 2,
+    "draft": null,
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer you can\u2019t confirm a refund on this call, and first verify whether there are two posted debits for \u20b94,999 to Urban Threads on card ending 7710 and whether one has already been refunded [KB-POL-DUP:0]. Do not promise a credit or quote the customer\u2019s amount unless it appears on the statement; any bank credit needs supervisor approval [KB-POL-DUP:0] [KB-SCRIPT-REFUND:0] [KB-POL-REFUND:0]. There is no draft in this run, so nothing has been drafted for review or supervisor send."
+   },
+   {
+    "id": "O05",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Tell the customer this is being handled under the unauthorised-transaction liability policy, not chargeback [KB-SOP-CHARGEBACK:0]. The calculator shows zero customer liability for this third-party breach reported within 3 working days (R17-6ii, R17-WD), with bank liability \u20b918,450 and a shadow credit due by 2026-12-07; don\u2019t present that as final because any credit needs supervisor approval [KB-POL-LIAB-A:0] [KB-POL-LIAB-A:1]. Review draft DRF-6F60FB56 and click \u201cSend to supervisor\u201d; also confirm whether the customer shared any OTP/PIN/card details, since customer negligence changes liability [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "O06",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 18450,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-9BB6936B and, if it matches the call, click \u201cSend to supervisor\u201d; nothing has been submitted yet. For this unauthorised card-not-present transaction, use the liability route, not chargeback [KB-SOP-CHARGEBACK:0]; the calculator shows zero customer liability under R17-6ii/R17-WD and a shadow credit of \u20b918,450 due by 2026-12-07, with resolution due by 2027-02-22 under R17-9/R17-10. The card is already blocked, and any credit needs supervisor approval [KB-POL-LIAB-A:1]; also confirm whether the customer shared any OTP/PIN/card details before finalising."
+   },
+   {
+    "id": "O07",
+    "repeat": 2,
+    "draft": {
+     "kind": "fee_reversal",
+     "amount_inr": 23,
+     "approver_role": "team_lead"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Review draft DRF-DF33F002 for the \u20b923 other-bank ATM fee on transaction T1003 dated 2026-11-20, then click \"Send to supervisor\"; nothing is submitted until you do. If asked whether it\u2019s done, say it is not done yet and you cannot promise the reversal before approval; fee reversals can be made when a fee was charged in error, and every fee reversal needs supervisor approval [KB-POL-FEES:0]."
+   },
+   {
+    "id": "O08",
+    "repeat": 2,
+    "draft": {
+     "kind": "shadow_credit",
+     "amount_inr": 64000,
+     "approver_role": "regional_ops_head"
+    },
+    "composed": true,
+    "premature": null,
+    "answer": "Confirm the card ending 9034 is blocked, then ask whether she shared any OTP, PIN or card details, because that still needs confirming and can affect liability. For this unauthorised card-not-present transaction, follow the liability policy, not chargeback [KB-SOP-CHARGEBACK:0]. The calculator shows \u20b90 customer liability under R17-6ii and a \u20b964,000 shadow credit due by 2026-12-07, but any credit needs supervisor approval [KB-POL-LIAB-A:1]. Review draft DRF-8ABF016B and click \"Send to supervisor\"."
+   }
+  ]
+ }
+}
