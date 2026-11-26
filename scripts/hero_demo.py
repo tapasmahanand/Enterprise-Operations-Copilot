@@ -104,7 +104,9 @@ def main() -> None:
                  json={"decision": "reject", "reason": "double click"})
     check(dup.status_code == 409, "second decision rejected with 409, no side effect")
     trace = c.get(f"/cases/{case['case_id']}", headers=sup).json()["events"]
-    check([e["node"] for e in trace][-3:] == ["approval_gate", "execute_action", "notify"], "case trace has every step")
+    nodes = [e["node"] for e in trace]
+    want = ["approval_gate", "execute_action", "notify", "notifier"]   # notifier = CreditPosted consumer (D56)
+    check(nodes[-4:] == want, f"case trace has every step {nodes[-4:]}")
     print("ALL PASS")
 
 
