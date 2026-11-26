@@ -305,3 +305,20 @@ ALTER TABLE chat_runs ADD COLUMN IF NOT EXISTS idv_level INT;   -- as attested b
 ALTER TABLE drafts    ADD COLUMN IF NOT EXISTS created_by TEXT;
 ALTER TABLE cases     ADD COLUMN IF NOT EXISTS submitted_by TEXT;
 ALTER TABLE approvals ADD COLUMN IF NOT EXISTS decided_by TEXT;
+
+-- Document access control (D54) ---------------------------------------------------
+-- audience: groups allowed to read a document (front-matter, required). Copied onto every
+-- chunk so the permission filter sits in the same WHERE as the vector ranking. The default
+-- is empty, which matches nobody: a database ingested before D54 returns no chunks until
+-- ingest runs again (fail closed, not open).
+ALTER TABLE documents       ADD COLUMN IF NOT EXISTS audience TEXT[] NOT NULL DEFAULT '{}';
+ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS audience TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS document_chunks_audience ON document_chunks USING gin (audience);
+
+-- Server-side group memberships. A user's groups are all_staff plus these rows; nothing a
+-- client sends can add one.
+CREATE TABLE IF NOT EXISTS user_groups (
+    user_id         TEXT NOT NULL REFERENCES app_users(user_id),
+    group_name      TEXT NOT NULL,
+    PRIMARY KEY (user_id, group_name)
+);

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -18,6 +19,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field
 
 from kestrel import auth, cases
+from kestrel.access import principal_for, redact_chunk_refs, visible_document_ids
 from kestrel.auth import User, audit, current_user, require
 from kestrel.config import get_settings
 from kestrel.db import connect
@@ -176,6 +178,7 @@ def stream(run_id: str, user: User = Depends(current_user)) -> StreamingResponse
     if pending is None:
         raise HTTPException(404, "unknown or already-streamed run")
     _, session_id, message, account_id, idv_level, _owner = pending
+    principal = principal_for(user)   # documents are filtered by the signed-in user's groups (D54)
 
     def gen():
         from kestrel.graphs.chat import stream_run
@@ -184,7 +187,7 @@ def stream(run_id: str, user: User = Depends(current_user)) -> StreamingResponse
         t0 = time.perf_counter()
         yield _sse({"type": "start", "run_id": run_id, "session_id": session_id})
         try:
-            for ev in stream_run(run_id, session_id, message, account_id, idv_level):
+            for ev in stream_run(run_id, session_id, message, account_id, idv_level, principal=principal):
                 if ev.get("type") == "final":
                     final = ev
                 yield _sse(ev)
@@ -224,8 +227,32 @@ def get_run(run_id: str, user: User = Depends(current_user)) -> dict:
             raise HTTPException(404, "run not found")
         ev = conn.execute("""SELECT node, status, latency_ms, tokens_in, tokens_out, cost_inr, detail, created_at
                              FROM run_events WHERE run_id = %s ORDER BY event_id""", (run_id,)).fetchall()
-    return {"run_id": r[0], "session_id": r[1], "message_masked": r[2], "state": r[3], "result": r[4],
-            "created_at": r[5], "trace_url": trace_url(run_id), "events": [_event(e) for e in ev], **_totals(ev)}
+        events, result = [_event(e) for e in ev], r[4]
+        if r[6] != user.user_id:
+            # A supervisor reading an agent's run sees only the documents they may read (D54).
+            events, result = _redact_run(conn, principal_for(user), events, result)
+    return {"run_id": r[0], "session_id": r[1], "message_masked": r[2], "state": r[3], "result": result,
+            "created_at": r[5], "trace_url": trace_url(run_id), "events": events, **_totals(ev)}
+
+
+_KB_REF = re.compile(r"\bKB-[A-Z0-9-]+[A-Z0-9](?::\d+)?")
+
+
+def _redact_run(conn, viewer, events: list[dict], result: dict | None) -> tuple[list[dict], dict | None]:
+    """Replace every document or chunk id the viewer can't read, wherever it appears in a run's
+    trace rows and stored result (retrieval detail, output check, citations, answer text)."""
+    blob = json.dumps({"events": events, "result": result}, default=str)
+    refs = set(_KB_REF.findall(blob))
+    docs = {r.split(":", 1)[0] for r in refs}
+    ok_docs = visible_document_ids(conn, viewer, docs)
+    # Rule ids such as KB-REF-1 look like document ids but name no document: leave them.
+    real = {d for (d,) in conn.execute("SELECT document_id FROM documents WHERE document_id = ANY(%s)",
+                                        (list(docs),)).fetchall()}
+    for ref in sorted(refs, key=len, reverse=True):     # chunk ids before their document id
+        if ref.split(":", 1)[0] in real - ok_docs:
+            blob = blob.replace(ref, "[restricted]")
+    out = json.loads(blob)
+    return out["events"], out["result"]
 
 
 def _event(e) -> dict:
@@ -264,13 +291,19 @@ def get_case(case_id: str, user: User = Depends(current_user)) -> dict:
     with connect() as conn:
         ev = conn.execute("""SELECT node, status, latency_ms, tokens_in, tokens_out, cost_inr, detail, created_at
                              FROM run_events WHERE run_id = %s ORDER BY event_id""", (case_id,)).fetchall()
+        c["evidence"] = redact_chunk_refs(conn, principal_for(user), c.get("evidence") or [])
     return {**c, "trace_url": trace_url(case_id), "events": [_event(e) for e in ev], **_totals(ev)}
 
 
 @app.get("/approvals")
 def list_approvals(state: Literal["pending"] = "pending", user: User = Depends(current_user)) -> list[dict]:
     require(user, "supervisor")
-    return cases.pending_approvals()
+    rows = cases.pending_approvals()
+    with connect() as conn:   # evidence from documents this supervisor can't read is redacted (D54)
+        viewer = principal_for(user)
+        for r in rows:
+            r["evidence"] = redact_chunk_refs(conn, viewer, r.get("evidence") or [])
+    return rows
 
 
 class DecisionIn(BaseModel):

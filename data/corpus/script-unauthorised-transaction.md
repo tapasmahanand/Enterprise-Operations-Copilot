@@ -4,6 +4,7 @@ title: Call Script — Unrecognised or Unauthorised Transaction
 document_type: script
 department: contact_centre
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-04-01
 status: current
 ---

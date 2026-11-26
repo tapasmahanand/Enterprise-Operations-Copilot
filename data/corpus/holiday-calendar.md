@@ -4,6 +4,7 @@ title: Working Days and Holiday Calendar (Mumbai home branches)
 document_type: guideline
 department: operations
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-01-01
 status: current
 ---

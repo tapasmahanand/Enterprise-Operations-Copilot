@@ -4,6 +4,7 @@ title: Customer Protection in Fraudulent Electronic Banking Transactions (transa
 document_type: policy
 department: fraud_disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2026-12-01
 status: current
 applies_to_txn_on_or_after: 2027-01-01

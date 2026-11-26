@@ -47,6 +47,14 @@ DEMO_USERS = [
     ("farah", "Farah Qureshi", "supervisor", "P03"),   # ops_manager
     ("rohan", "Rohan Iyer", "supervisor", "P04"),      # regional_ops_head
     ("compliance1", "Kabir Sethi", "compliance", None),
+    ("fraud1", "Meera Pillai", "agent", None),         # fraud operations specialist (D54)
+]
+
+# Server-side group memberships (D54). Every user is also in all_staff; these add to it.
+DEMO_GROUPS = [
+    ("fraud1", "fraud_operations"),
+    ("compliance1", "compliance"),
+    ("ananya", "supervisors"), ("farah", "supervisors"), ("rohan", "supervisors"),
 ]
 
 
@@ -57,10 +65,11 @@ class User:
     role: str
     person_id: str | None
     approver_role: str | None = None   # org_directory role of person_id, e.g. team_lead
+    groups: tuple[str, ...] = ()       # user_groups rows; all_staff is implied (D54)
 
     def public(self) -> dict[str, Any]:
         return {"user_id": self.user_id, "display_name": self.display_name, "role": self.role,
-                "person_id": self.person_id, "approver_role": self.approver_role}
+                "person_id": self.person_id, "approver_role": self.approver_role, "groups": list(self.groups)}
 
 
 # --- passwords ---------------------------------------------------------------------------
@@ -99,6 +108,9 @@ def seed_users(conn: psycopg.Connection, password: str | None = None) -> int:
             """INSERT INTO app_users (user_id, display_name, role, person_id, password_hash)
                VALUES (%s, %s, %s, %s, %s) ON CONFLICT (user_id) DO NOTHING""",
             (user_id, name, role, person_id, hash_password(password))).rowcount
+    for user_id, group in DEMO_GROUPS:
+        conn.execute("INSERT INTO user_groups (user_id, group_name) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                     (user_id, group))
     conn.commit()
     return n
 
@@ -171,7 +183,9 @@ def _load_user(conn: psycopg.Connection, user_id: str) -> User:
     r = conn.execute("""SELECT u.user_id, u.display_name, u.role, u.person_id, o.role
                         FROM app_users u LEFT JOIN org_directory o USING (person_id)
                         WHERE u.user_id = %s""", (user_id,)).fetchone()
-    return User(*r)
+    groups = tuple(g for (g,) in conn.execute(
+        "SELECT group_name FROM user_groups WHERE user_id = %s ORDER BY group_name", (user_id,)).fetchall())
+    return User(*r, groups=groups)
 
 
 def user_for_token(token: str) -> User | None:

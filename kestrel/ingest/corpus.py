@@ -11,7 +11,9 @@ from typing import Any
 
 import yaml
 
-REQUIRED = ("id", "title", "document_type", "department", "status")
+from kestrel.access import KNOWN_GROUPS
+
+REQUIRED = ("id", "title", "document_type", "department", "status", "audience")
 # Brief: 400–800 tokens per chunk. ~4 characters per token for English policy text.
 CHARS_PER_TOKEN = 4
 MAX_CHARS = 2400   # ≈ 600 tokens
@@ -30,6 +32,7 @@ class Document:
     status: str
     supersedes: str | None
     body: str
+    audience: list[str] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -56,7 +59,15 @@ def parse_document(path: Path, root: Path) -> Document:
     missing = [k for k in REQUIRED if k not in meta]
     if missing:
         raise ValueError(f"{path}: missing front-matter keys {missing}")
+    audience = meta["audience"]
+    # Who may read it (D54). Required and checked, so a missing or misspelt group fails the
+    # ingest instead of quietly exposing or hiding a document.
+    if isinstance(audience, str):
+        audience = [audience]
+    if not audience or not isinstance(audience, list) or set(audience) - KNOWN_GROUPS:
+        raise ValueError(f"{path}: audience must be a non-empty list of {sorted(KNOWN_GROUPS)}, got {audience!r}")
     return Document(
+        audience=sorted(audience),
         document_id=meta["id"],
         title=meta["title"],
         source_path=str(path.relative_to(root)),
@@ -108,6 +119,7 @@ def chunk_document(doc: Document) -> list[Chunk]:
         "document_type": doc.document_type,
         "department": doc.department,
         "sensitivity": doc.sensitivity,
+        "audience": doc.audience,
         "status": doc.status,
         "source_path": doc.source_path,
         "effective_from": doc.effective_from.isoformat() if doc.effective_from else None,

@@ -4,6 +4,7 @@ title: Call Handling Standards for the Resolution Desk
 document_type: guideline
 department: contact_centre
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-01-01
 status: current
 ---

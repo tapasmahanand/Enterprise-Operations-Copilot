@@ -4,6 +4,7 @@ title: Agent FAQ — UPI and IMPS Transfers
 document_type: guideline
 department: payments_ops
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-02-15
 status: current
 ---

@@ -48,6 +48,13 @@ def ingest_corpus(conn, settings, embedder) -> dict[str, int]:
            FROM documents d LEFT JOIN document_chunks c USING (document_id) GROUP BY 1, 2""").fetchall()}
     for doc in docs:
         if existing.get(doc.document_id) == (doc.content_hash, embedder.model):
+            # Text unchanged, so no re-embedding; but an audience change must still apply (D54).
+            conn.execute("UPDATE documents SET audience = %s WHERE document_id = %s AND audience IS DISTINCT FROM %s",
+                         (doc.audience, doc.document_id, doc.audience))
+            conn.execute("""UPDATE document_chunks SET audience = %s,
+                                metadata = jsonb_set(metadata, '{audience}', to_jsonb(%s::text[]))
+                            WHERE document_id = %s AND audience IS DISTINCT FROM %s""",
+                         (doc.audience, doc.audience, doc.document_id, doc.audience))
             stats["skipped"] += 1
             continue
         chunks = chunk_document(doc)
@@ -56,17 +63,18 @@ def ingest_corpus(conn, settings, embedder) -> dict[str, int]:
             conn.execute("DELETE FROM documents WHERE document_id = %s", (doc.document_id,))
             conn.execute(
                 """INSERT INTO documents (document_id, title, source_path, document_type, department, sensitivity,
-                                          effective_from, status, supersedes, content_hash)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                          effective_from, status, supersedes, content_hash, audience)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (doc.document_id, doc.title, doc.source_path, doc.document_type, doc.department, doc.sensitivity,
-                 doc.effective_from, doc.status, doc.supersedes, doc.content_hash),
+                 doc.effective_from, doc.status, doc.supersedes, doc.content_hash, doc.audience),
             )
             with conn.cursor() as cur:
                 cur.executemany(
-                    """INSERT INTO document_chunks (chunk_id, document_id, chunk_index, chunk_text, token_count, metadata, embedding)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    """INSERT INTO document_chunks (chunk_id, document_id, chunk_index, chunk_text, token_count, metadata,
+                                                     embedding, audience)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                     [(c.chunk_id, c.document_id, c.chunk_index, c.text, c.token_count,
-                      Jsonb({**c.metadata, "embedding_model": embedder.model}), v)
+                      Jsonb({**c.metadata, "embedding_model": embedder.model}), v, doc.audience)
                      for c, v in zip(chunks, vectors)],
                 )
         stats["embedded"] += 1

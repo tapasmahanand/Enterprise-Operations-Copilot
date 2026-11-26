@@ -4,6 +4,7 @@ title: Call Script — Failed Transaction, Money Debited
 document_type: script
 department: contact_centre
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2024-07-01
 status: current
 ---

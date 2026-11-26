@@ -4,6 +4,7 @@ title: Duplicate Card Charges
 document_type: policy
 department: disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2025-01-10
 status: current
 ---

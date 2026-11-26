@@ -11,6 +11,8 @@ intent-policy boost on top of "vector + filters".
 
 from __future__ import annotations
 
+from kestrel.access import TIER1
+
 from datetime import date
 
 import yaml
@@ -62,8 +64,8 @@ def run(k: int = 5) -> dict:
             for g, vec in zip(gold, vecs):
                 txn = g.get("txn_date")
                 kw = dict(include_superseded=not v["filters"], txn_date=txn if v["filters"] else None)
-                hits = (vector_search(conn, vec, k=20, **kw) if v["method"] == "vector"
-                        else hybrid_search(conn, vec, g["q"], k=20, **kw))
+                hits = (vector_search(conn, vec, k=20, principal=TIER1, **kw) if v["method"] == "vector"
+                        else hybrid_search(conn, vec, g["q"], k=20, principal=TIER1, **kw))
                 docs = _docs(hits)[:k]
                 rel = set(g["relevant"])
                 rank = next((i + 1 for i, d in enumerate(docs) if d in rel), None)

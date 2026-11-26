@@ -2,6 +2,7 @@ from datetime import date
 
 import pytest
 
+from kestrel.access import TIER1
 from kestrel.config import get_settings
 from kestrel.db import apply_schema, connect
 from kestrel.ingest.embed import FakeEmbedder
@@ -46,7 +47,7 @@ def test_liability_query_returns_current_policy_not_superseded(loaded):
     url, emb, *_ = loaded
     q = emb.embed(["customer liability for an unauthorised card transaction reported within three working days"])[0]
     with connect(url) as conn:
-        hits = vector_search(conn, q, k=5, txn_date=date(2026, 12, 1))
+        hits = vector_search(conn, q, k=5, principal=TIER1, txn_date=date(2026, 12, 1))
     ids = [h.document_id for h in hits]
     assert ids[0] == "KB-POL-LIAB-A"
     assert "KB-POL-LIAB-2018" not in ids
@@ -57,7 +58,7 @@ def test_txn_date_in_2027_selects_new_regime(loaded):
     url, emb, *_ = loaded
     q = emb.embed(["customer liability fraudulent electronic transaction reported within 5 calendar days"])[0]
     with connect(url) as conn:
-        hits = vector_search(conn, q, k=5, txn_date=date(2027, 1, 4))
+        hits = vector_search(conn, q, k=5, principal=TIER1, txn_date=date(2027, 1, 4))
     ids = [h.document_id for h in hits]
     assert ids[0] == "KB-POL-LIAB-B"
     assert "KB-POL-LIAB-A" not in ids
@@ -67,8 +68,8 @@ def test_superseded_doc_only_returned_when_asked(loaded):
     url, emb, *_ = loaded
     q = emb.embed(["Unauthorised Transactions Policy 2018 edition"])[0]
     with connect(url) as conn:
-        assert "KB-POL-LIAB-2018" not in [h.document_id for h in vector_search(conn, q, k=10)]
-        assert "KB-POL-LIAB-2018" in [h.document_id for h in vector_search(conn, q, k=10, include_superseded=True)]
+        assert "KB-POL-LIAB-2018" not in [h.document_id for h in vector_search(conn, q, k=10, principal=TIER1)]
+        assert "KB-POL-LIAB-2018" in [h.document_id for h in vector_search(conn, q, k=10, principal=TIER1, include_superseded=True)]
 
 
 def test_banking77_normalised_with_in_scope_flag(loaded):

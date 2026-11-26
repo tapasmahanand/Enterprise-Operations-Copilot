@@ -4,6 +4,7 @@ title: Unauthorised Transactions Policy (2018 edition)
 document_type: policy
 department: fraud_disputes
 sensitivity: internal
+audience: [all_staff]
 effective_from: 2018-01-15
 status: superseded
 superseded_by: KB-POL-LIAB-A
