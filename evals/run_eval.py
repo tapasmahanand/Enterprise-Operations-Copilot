@@ -93,7 +93,7 @@ def _doc(chunk_id: str) -> str:
 def run_scenario(sc: dict, judge: bool) -> dict:
     from kestrel.db import connect
     from kestrel.graphs.chat import _facts, chat_graph, stream_run
-    from kestrel.guards.output import _CITE, _unnegated_promise
+    from kestrel.guards.output import _CITE, _unnegated_promise, premature_submission
     from kestrel.llm import get_llm
     with connect() as conn:   # every scenario starts from the same bank state
         conn.execute("UPDATE mock_cards SET status = 'active'")
@@ -158,7 +158,8 @@ def run_scenario(sc: dict, judge: bool) -> dict:
                                     Groundedness, model=JUDGE_MODEL)
         n = len(v.claims)
         g = {"claims": n, "supported": sum(c.supported for c in v.claims),
-             "unsupported": [c.claim for c in v.claims if not c.supported]}
+             "unsupported": [c.claim for c in v.claims if not c.supported],
+             "facts": _facts(st)}   # kept so judge misses can be checked against what the judge saw (D61)
     audit = None
     if d:
         nodes = {r[0] for r in rows}
@@ -173,6 +174,7 @@ def run_scenario(sc: dict, judge: bool) -> dict:
             "citations": cited, "output_verdict": oc.get("verdict"), "violations": oc.get("violations", []),
             "raw_promise": bool(_unnegated_promise(raw_text)) if composed else False,
             "shipped_promise": bool(_unnegated_promise(ans)) and oc.get("verdict") == "allow",
+            "premature_submission": bool(premature_submission(ans)) if composed else False,
             "raw_invented_citation": bool(raw_cites - retrieved), "composed": composed,
             "latency_s": round(latency, 2), "first_token_s": round(first_token, 2) if first_token else None,
             "tokens": sum((r[2] or 0) + (r[3] or 0) for r in rows),
@@ -317,6 +319,7 @@ def summarise(results: list[dict]) -> dict:
         "withheld": sum(r["output_verdict"] == "block" for r in composed) / max(1, len(composed)),
         "raw_promise": sum(r["raw_promise"] for r in composed), "shipped_promise": sum(r["shipped_promise"] for r in results),
         "raw_invented_citation": sum(r["raw_invented_citation"] for r in composed), "n_composed": len(composed),
+        "premature_submission": sum(r.get("premature_submission", False) for r in composed),
         "audit_complete": sum(all(a.values()) for a in audits) / len(audits) if audits else None, "n_drafts": len(audits),
         "p50_s": statistics.median(lat) if lat else None, "p95_s": p95,
         "first_token_p50_s": statistics.median([r["first_token_s"] for r in results if r["first_token_s"]] or [0]),
@@ -377,6 +380,7 @@ def write_report(res: dict, out: Path) -> None:
               "| Metric | Value | How measured |", "|---|---|---|",
               f"| Unapproved promises reaching the agent | **{p['shipped_promise']}** of {p['n']} runs | promise regex on the answer the agent saw |",
               f"| Unapproved promises the model *attempted* | {p['raw_promise']} of {p['n_composed']} composed answers | same regex on the raw stream, before the output check |",
+              f"| Says the request is already with a supervisor (before the agent sends it) | {p.get('premature_submission', '–')} of {p['n_composed']} composed answers | `premature_submission` regex on the answer (D61) |",
               f"| Invented citations in the raw stream | {p['raw_invented_citation']} of {p['n_composed']} | cited chunk id not retrieved in that run (the postmortem bug) |",
               f"| Audit completeness of drafted actions | {pct(p['audit_complete'])} of {p['n_drafts']} drafts | every node in run_events, IDV level and evidence on the draft, amount from lookup, rule ids |",
               f"| Handling-time proxy | p50 {p['p50_s']:.1f} s per copilot answer | wall clock; the KB-STD-CALLS AHT target is 6 min per call |"]
