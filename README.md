@@ -122,27 +122,46 @@ Offline / no key: set `EMBEDDING_PROVIDER=fake` in `.env` (lexical test embeddin
 
 ## Results (Milestone 4)
 
-Full numbers: [reports/eval.md](reports/eval.md) (run 7, 26 Nov 2026, after D59 (grounded draft
-workflow) and D60 (KB-REF-1 hold); run 6 was after the fee-reversal routing fix D58; 25 tuned scenarios plus 8 held-out, each 3 times per model). Run it yourself with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD
+Full numbers: [reports/eval.md](reports/eval.md) (run 8, 26 Nov 2026, after D61 (no "already sent to
+a supervisor" claims); run 7 was after D59 (grounded draft workflow) and D60 (KB-REF-1 hold), run 6 after
+the fee-reversal routing fix D58; 25 tuned scenarios plus 8 held-out, each 3 times per model). Run it yourself with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD
 assumed). Earlier runs are kept in `reports/eval-run*.md`.
 
-**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 7, run 6 in brackets):
+**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 8, run 7 in brackets):
 
 | | gpt-5.4-mini (production) | gpt-5.4 |
 |---|---|---|
-| Scenario runs passing | **97/99** (93/99) | **98/99** (97/99) |
+| Scenario runs passing | 96/99 (97/99) | **98/99** (98/99) |
 | Held-out scenarios passing all repeats | **8/8** (8/8) | **8/8** (8/8) |
 | Outcome correct (draft / no draft / amount / tier) | **100%** (100%) | **100%** (100%) |
-| Intent label correct | 97% (94%) | 100% (100%) |
-| Cites the governing policy | 100% (96%) | 98% (96%) |
-| Groundedness: supported claims (LLM judge) | 94% (91%) | 97% (90%) |
-| Answers with zero unsupported claims | **63%** (48%) | **73%** (31%) |
-| BANKING77 intent accuracy (n=200) | 74% (76%) | 79% (78%) |
-| Out-of-scope correctly refused | 71% (77%) | 75% (71%) |
-| Latency p50 / p95 | 3.3 s / 4.0 s (3.5 / 4.0) | 5.5 s / 6.6 s (5.3 / 6.0) |
-| Cost per copilot answer | ₹0.29 (₹0.28) | ₹0.99 (₹0.95) |
+| Intent label correct | 95% (97%) | 100% (100%) |
+| Cites the governing policy | 100% (100%) | 98% (98%) |
+| Groundedness: supported claims (LLM judge) | 97% (94%) | 97% (97%) |
+| Answers with zero unsupported claims | 83% (63%) | 80% (73%) |
+| Says the request is already with a supervisor, first repeat | **0/30** (4/30) | **0/30** (2/30) |
+| BANKING77 intent accuracy (n=200) | 73% (74%) | 78% (79%) |
+| Out-of-scope correctly refused | 70% (71%) | 75% (75%) |
+| Latency p50 / p95 | 3.9 s / 4.9 s (3.3 / 4.0) | 5.2 s / 6.4 s (5.5 / 6.6) |
+| Cost per copilot answer | ₹0.29 (₹0.29) | ₹1.00 (₹0.99) |
 
-What moved, and why we think so (run 7):
+What moved in run 8:
+- **"Already sent to a supervisor" claims removed (D61).** Before, answers often told the agent (or
+  scripted for the customer) "I've raised a request to credit the duplicate amount" while the draft
+  was still unsent; the line comes from KB-SCRIPT-REFUND, which is meant to be said after the click.
+  On 8 held-out notes that produce a draft (`evals/overclaim_probes.yaml`, 3 repeats): 8/24 → 2/24
+  answers on mini, 9/24 → 0/24 on gpt-5.4. In the eval: 0 of 30 first-repeat answers on both models
+  (run 7: 4 and 2); 1 of 90 composed mini answers across all repeats. The detector
+  (`premature_submission`) is an eval metric, not a withholding rule.
+- **Judge misses, counted, not tuned away.** Run 8 saves what the judge saw. Of its 16 unsupported
+  claims, 7 are clear judge errors (6 "the agent should not ..." cautions its rubric excludes, 1 refusal
+  that FACTS state), 1 is a correct flag, and 8 can't be settled from FACTS alone. So the
+  groundedness figures are lower bounds; the jump to 83% on mini is partly run-to-run variation (one
+  judge pass over 30 answers).
+- **Not fixed:** S09's intent label on mini (0/3; its outcome is right). Fixing it means describing
+  confusable BANKING77 intents in the Supervisor prompt, which moves every routing number, and a
+  200-query sample can't tell a 2-point gain from noise. Not worth it before submission.
+
+What moved in run 7:
 - **Groundedness up, for a known reason (D59).** Run 6's unsupported claims were about half judge misses
   (a "Send to supervisor" step flagged although that run had a draft: 15) and half real composer errors
   (the step said, often as "if a draft exists", when there was no draft: 15). The fix is in the
