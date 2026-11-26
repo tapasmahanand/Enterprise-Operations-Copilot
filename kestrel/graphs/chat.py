@@ -255,7 +255,11 @@ def supervisor(state: ChatState) -> dict:
     override = override or deferred
     refusal = _refusal(state, d)
     if refusal:
-        d.route = "refuse"
+        # KB-REF-1 is a hold, not a dead end (D60): nothing is drafted (no tool or draft node runs on
+        # rag), the refusal is recorded and shown, and the agent still gets the policy answer, e.g.
+        # "our system posted twice, do we reimburse the overdraft charge?" asked before OTP (scope
+        # t-v18). KB-REF-2 (contact change) stays a plain refusal.
+        d.route = "rag" if refusal["rule_id"] == "KB-REF-1" else "refuse"
     return {"sup": d.model_dump(), "refusal": refusal, **({"no_draft_reason": deferred} if deferred else {}),
             "tokens_used": state.get("tokens_used", 0) + usage.tokens_in + usage.tokens_out,
             "_trace": {"detail": {"intent": d.intent, "route": d.route, "rationale": d.rationale,
@@ -608,8 +612,12 @@ Rules:
 - Use only the FACTS and the POLICY CHUNKS below. Cite every policy statement with its chunk id in square brackets,
   exactly as given, e.g. [KB-POL-LIAB-A:0]. Mention rule ids from FACTS (e.g. R17-6ii) where they apply.
 - Every amount and date you state must appear in FACTS. Never compute or estimate amounts or dates yourself.
-- Never promise a refund, credit or outcome as final: credits need supervisor approval. If a draft exists, tell the
-  agent to review it and click "Send to supervisor".
+- Never promise a refund, credit or outcome as final: credits need supervisor approval.
+- Mention reviewing or sending a draft only if FACTS list one ("draft DRF-..."); then tell the agent to review it
+  and click "Send to supervisor". If FACTS say no draft exists, do not mention a draft or "Send to supervisor" at
+  all, not even conditionally ("if a draft exists ..."), even when a policy chunk says the copilot drafts one.
+- If FACTS say REFUSED, start with that: no action can be drafted on this call until the stated condition is met
+  (give it), and nothing has been drafted. Then answer the policy question from the chunks, if there is one.
 - If the chunks don't cover the question, say "I couldn't find policy for this" and stop.
 - Lead with what the agent should do or say next. Don't restate every fact: the UI already shows the
   calculator figures, the draft and the script.
@@ -644,8 +652,12 @@ def _facts(state: ChatState) -> str:
         extra = " (one tier up: repeat dispute in 90 days)" if d.get("repeat_dispute") else ""
         lines.append(f"draft {d['draft_id']}: {d['kind'].replace('_', ' ')} of ₹{d['amount_inr']:,}, needs approval by "
                      f"{d['approver_role']}{extra} (KB-MATRIX); not yet sent to supervisor")
-    elif r := state.get("no_draft_reason"):
-        lines.append(f"no action drafted: {r}")
+        lines.append("next step in the copilot: the agent reviews this draft in the side panel and clicks "
+                     "\"Send to supervisor\"; nothing is submitted until they do")
+    else:
+        why = state.get("no_draft_reason")
+        lines.append("no draft exists in this run" + (f" ({why})" if why else "") +
+                     "; there is nothing for the agent to review or send to a supervisor")
     if (sup.get("customer_shared_credentials") is None) and sup.get("intent") in FRAUD_INTENTS:
         lines.append("not yet confirmed with customer: whether they shared OTP/PIN/card details (affects liability)")
     return "\n".join(f"- {x}" for x in lines)

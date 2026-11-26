@@ -1,0 +1,1310 @@
+{
+ "prod": {
+  "summary": {
+   "answers": 17,
+   "zero_unsupported": 5,
+   "claims": 89,
+   "supported": 70,
+   "workflow_with_draft": 0,
+   "workflow_no_draft": 4,
+   "other": 15
+  },
+  "runs": [
+   {
+    "id": "w-v01",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_not_recognised",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REFUND:0",
+     "KB-POL-REIMB:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.32,
+    "first_token_s": 2.74,
+    "tokens": 3948,
+    "cost_inr": 0.3226,
+    "groundedness": {
+     "claims": 8,
+     "supported": 5,
+     "unsupported": [
+      "The customer should provide order details.",
+      "The customer should provide proof the item is counterfeit.",
+      "No policy was found for this."
+     ]
+    },
+    "audit": null,
+    "answer": "Ask the customer first to contact the merchant and get their refusal, plus any order details and proof the item is counterfeit; if they have no ARN, they should contact the merchant first before chargeback [KB-POL-REFUND:0]. If this is actually a bank-side error or reimbursement request, any credit needs supervisor approval and out-of-pocket costs need a document from the customer [KB-POL-REIMB:0]. I couldn't find policy for this."
+   },
+   {
+    "id": "w-v02",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-FEES:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.45,
+    "first_token_s": 2.67,
+    "tokens": 3279,
+    "cost_inr": 0.2838,
+    "groundedness": {
+     "claims": 7,
+     "supported": 5,
+     "unsupported": [
+      "The agent should have the draft reviewed and click 'Send to supervisor'.",
+      "If the fee is the quarterly/annual card maintenance fee, use the amount from the statement."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer you can submit a fee reversal request as goodwill, but you can\u2019t promise the outcome yet because every fee reversal needs supervisor approval [KB-POL-FEES:0]. Have the draft reviewed and click \u201cSend to supervisor\u201d; goodwill reversals are allowed at most once in 12 months per fee type [KB-POL-FEES:0]. If the fee is the quarterly/annual card maintenance fee, use the amount from the statement and don\u2019t promise any credit before approval [KB-POL-FEES:0]."
+   },
+   {
+    "id": "w-v03",
+    "ok": true,
+    "checks": {},
+    "intent": "customer_protection_in_fraudulent_electronic_banking_transactions",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-LIAB-A:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.42,
+    "first_token_s": 2.81,
+    "tokens": 3967,
+    "cost_inr": 0.3323,
+    "groundedness": {
+     "claims": 4,
+     "supported": 3,
+     "unsupported": [
+      "This should be treated as a 1\u20137 working day report under KB-POL-LIAB-A:0."
+     ]
+    },
+    "audit": null,
+    "answer": "Treat this as a 1\u20137 working day report under KB-POL-LIAB-A:0. If it was a third-party breach, the customer\u2019s liability is the transaction value or the cap, whichever is lower; for a customer with other savings accounts, prepaid instruments, or a credit card limit up to \u20b95 lakh, the cap is \u20b910,000 [KB-POL-LIAB-A:0]. If it\u2019s after 7 working days, liability is under Board-approved policy and needs supervisor review [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "w-v04",
+    "ok": true,
+    "checks": {},
+    "intent": "request_refund",
+    "route": "tools",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REFUND:0",
+     "KB-SCRIPT-REFUND:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.3,
+    "first_token_s": 2.67,
+    "tokens": 3245,
+    "cost_inr": 0.2827,
+    "groundedness": {
+     "claims": 6,
+     "supported": 5,
+     "unsupported": [
+      "The policy does not state what to do when the merchant processed only a partial refund."
+     ]
+    },
+    "audit": null,
+    "answer": "First, verify the caller before any account lookup, since KB-SOP-IDV level 1 is needed. For a merchant refund shortfall, ask for the merchant\u2019s refund reference (ARN) and refund date; if fewer than 7 working days have passed, explain the merchant refund timeline, and if more than 7 working days have passed and there is an ARN, open a refund trace ticket (`refund_trace`) [KB-POL-REFUND:0][KB-SCRIPT-REFUND:0]. If the merchant only processed a partial refund, I couldn\u2019t find policy for this."
+   },
+   {
+    "id": "w-v05",
+    "ok": true,
+    "checks": {},
+    "intent": "transfer_not_received_by_recipient",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-TAT:0",
+     "KB-FAQ-UPI:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.07,
+    "first_token_s": 2.67,
+    "tokens": 3782,
+    "cost_inr": 0.2998,
+    "groundedness": {
+     "claims": 3,
+     "supported": 3,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Tell the customer that for an RTGS transfer not received by the beneficiary, I couldn\u2019t find policy for this. The available TAT policy covers IMPS and UPI reversals, not RTGS [KB-POL-TAT:0] [KB-FAQ-UPI:0]."
+   },
+   {
+    "id": "w-v06",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 2.49,
+    "first_token_s": 2.37,
+    "tokens": 3691,
+    "cost_inr": 0.2751,
+    "groundedness": {
+     "claims": 1,
+     "supported": 0,
+     "unsupported": [
+      "The copilot could not find a policy for whether a \u20b975,000 credit needs a regional head's approval."
+     ]
+    },
+    "audit": null,
+    "answer": "I couldn\u2019t find policy for this."
+   },
+   {
+    "id": "w-v07",
+    "ok": true,
+    "checks": {},
+    "intent": "complaint_escalation_and_grievance_redressal",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-ESC:0",
+     "KB-DIR-ORG:0",
+     "KB-MATRIX:0"
+    ],
+    "output_verdict": "block",
+    "violations": [
+     "contains unmasked personal data"
+    ],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 2.86,
+    "first_token_s": 2.34,
+    "tokens": 3653,
+    "cost_inr": 0.3071,
+    "groundedness": null,
+    "audit": null,
+    "answer": "[The drafted answer was withheld by the output check: contains unmasked personal data.]\n\nFacts from bank systems:\n- intent: complaint_escalation_and_grievance_redressal (route rag)"
+   },
+   {
+    "id": "w-v08",
+    "ok": true,
+    "checks": {},
+    "intent": "policy_question",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-GUIDE-NCRP:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.23,
+    "first_token_s": 3.88,
+    "tokens": 3562,
+    "cost_inr": 0.2855,
+    "groundedness": {
+     "claims": 5,
+     "supported": 5,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Tell the customer to report it to the national cybercrime helpline 1930 or cybercrime.gov.in as soon as possible [KB-GUIDE-NCRP:0]. Also ask whether they\u2019ve already reported it there, and record the acknowledgement number in the ticket [KB-GUIDE-NCRP:0]."
+   },
+   {
+    "id": "w-v09",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_not_recognised",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SCRIPT-FRAUD:0",
+     "KB-POL-LIAB-A:0",
+     "KB-POL-LIAB-A:1"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.49,
+    "first_token_s": 2.82,
+    "tokens": 3894,
+    "cost_inr": 0.3248,
+    "groundedness": {
+     "claims": 7,
+     "supported": 4,
+     "unsupported": [
+      "Liability depends on whether the customer shared OTP/PIN/card details and on the alert date, not on the missing alert alone.",
+      "If the customer did not receive the alert, that may affect the alert-timing test.",
+      "There is no policy stating that a missing SMS alone removes liability."
+     ]
+    },
+    "audit": null,
+    "answer": "Ask whether the customer shared any OTP, PIN, or card details and record the SMS alert date exactly; liability depends on that, not on the missing alert alone [KB-SCRIPT-FRAUD:0][KB-POL-LIAB-A:0]. For pre-1 Jan 2027 transactions, the bank must prove liability and a customer who did not receive the alert may affect the alert-timing test, but I couldn\u2019t find policy that says missing SMS alone removes liability [KB-POL-LIAB-A:0][KB-POL-LIAB-A:1]."
+   },
+   {
+    "id": "w-v10",
+    "ok": true,
+    "checks": {},
+    "intent": "policy_question",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-FEES:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.14,
+    "first_token_s": 3.62,
+    "tokens": 3313,
+    "cost_inr": 0.2729,
+    "groundedness": {
+     "claims": 6,
+     "supported": 5,
+     "unsupported": [
+      "If the agent drafts it, they should review it and click 'Send to supervisor'."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer you can raise a fee reversal request, but you cannot promise the \u20b9590 cheque return charge will be waived until supervisor approval [KB-POL-FEES:0]. Goodwill reversal is allowed at most once in 12 months per fee type, and every fee reversal needs supervisor approval; if you draft it, review it and click \u201cSend to supervisor\u201d [KB-POL-FEES:0]."
+   },
+   {
+    "id": "w-v11",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": false,
+    "latency_s": 1.09,
+    "first_token_s": 1.05,
+    "tokens": 1584,
+    "cost_inr": 0.1326,
+    "groundedness": null,
+    "audit": null,
+    "answer": "I can't help with this on the call: The request asks to reveal or include sensitive personal data, which is not allowed in copilot notes. Identity checks, contact-detail changes and data masking can't be bypassed. The request is logged."
+   },
+   {
+    "id": "w-v12",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "refuse",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": false,
+    "latency_s": 2.31,
+    "first_token_s": 2.27,
+    "tokens": 1587,
+    "cost_inr": 0.1351,
+    "groundedness": null,
+    "audit": null,
+    "answer": "This request is outside what the copilot handles at tier 1 (classified as out_of_scope). Please use the standard servicing process or escalate to your team lead."
+   },
+   {
+    "id": "w-v13",
+    "ok": true,
+    "checks": {},
+    "intent": "request_refund",
+    "route": "tools",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REFUND:0",
+     "KB-SOP-CHARGEBACK:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.17,
+    "first_token_s": 3.38,
+    "tokens": 3496,
+    "cost_inr": 0.3114,
+    "groundedness": {
+     "claims": 8,
+     "supported": 8,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Ask for the merchant\u2019s refund reference (ARN) and the refund date, and explain that merchant refunds normally arrive within 5 to 7 working days after the merchant processes them [KB-POL-REFUND:0]. If more than 7 working days have passed and they have an ARN, open a refund trace ticket (`refund_trace`); if there\u2019s no ARN, tell them to contact the merchant first, and only if the merchant refuses may a chargeback be possible for a promised refund not received after 30 days [KB-POL-REFUND:0][KB-SOP-CHARGEBACK:0]. Don\u2019t promise any bank credit or outcome, and if you draft a chargeback, it needs supervisor approval [KB-SOP-CHARGEBACK:0]."
+   },
+   {
+    "id": "w-v14",
+    "ok": true,
+    "checks": {},
+    "intent": "customer_protection_in_fraudulent_electronic_banking_transactions",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-COMP:0",
+     "KB-POL-LIAB-B:0",
+     "KB-POL-LIAB-A:1",
+     "KB-SCRIPT-FRAUD:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.14,
+    "first_token_s": 2.59,
+    "tokens": 3969,
+    "cost_inr": 0.3313,
+    "groundedness": {
+     "claims": 8,
+     "supported": 5,
+     "unsupported": [
+      "The bank cannot promise the amount back before review.",
+      "The agent should review a draft and click \u201cSend to supervisor.\u201d",
+      "The case will continue through case review."
+     ]
+    },
+    "audit": null,
+    "answer": "Don\u2019t guarantee a written recovery; say we can\u2019t promise the amount back before review and supervisor approval. Tell the customer the bank will assess liability under the fraud policy, and if a credit applies, it still needs supervisor approval\u2014please review the draft and click \u201cSend to supervisor\u201d [KB-SOP-COMP:0][KB-POL-LIAB-B:0][KB-POL-LIAB-A:1][KB-SCRIPT-FRAUD:0]. Also say you\u2019ll block the card/channel immediately and continue the case review [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "w-v15",
+    "ok": true,
+    "checks": {},
+    "intent": "lost_or_stolen_card",
+    "route": "action",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-BLOCK:0",
+     "KB-GUIDE-PII:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.45,
+    "first_token_s": 2.89,
+    "tokens": 3327,
+    "cost_inr": 0.2736,
+    "groundedness": {
+     "claims": 5,
+     "supported": 5,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Confirm identity first at KB-SOP-IDV level 1, then block the card immediately for the lost/stolen report and add a ticket note with the block time [KB-SOP-BLOCK:0]. If the customer shared any OTP/PIN/card details, treat it as compromised and follow the block SOP [KB-GUIDE-PII:0]."
+   },
+   {
+    "id": "w-v16",
+    "ok": true,
+    "checks": {},
+    "intent": "extra_charge_on_statement",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-DUP:0",
+     "KB-POL-REFUND:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 3.1,
+    "first_token_s": 2.56,
+    "tokens": 3300,
+    "cost_inr": 0.2826,
+    "groundedness": {
+     "claims": 8,
+     "supported": 7,
+     "unsupported": [
+      "The agent should click \u201cSend to supervisor.\u201d"
+     ]
+    },
+    "audit": null,
+    "answer": "First, verify the duplicate charge is genuine and posted, and check whether the merchant has already refunded one of the debits [KB-POL-DUP:0]. Since the caller is at level 0, no fee reversal can be drafted yet; a fee reversal can only be drafted after identity verification level 2 (OTP, KB-REF-1). If confirmed and not refunded, draft the credit and click \u201cSend to supervisor,\u201d but do not promise the outcome [KB-POL-DUP:0][KB-POL-REFUND:0]."
+   },
+   {
+    "id": "w-v17",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 2.61,
+    "first_token_s": 2.5,
+    "tokens": 3844,
+    "cost_inr": 0.2849,
+    "groundedness": {
+     "claims": 1,
+     "supported": 0,
+     "unsupported": [
+      "The agent/call-centre copilot could not find a policy for this question."
+     ]
+    },
+    "audit": null,
+    "answer": "I couldn't find policy for this."
+   },
+   {
+    "id": "w-v18",
+    "ok": true,
+    "checks": {},
+    "intent": "policy_question",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REIMB:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.15,
+    "first_token_s": 3.61,
+    "tokens": 3899,
+    "cost_inr": 0.3141,
+    "groundedness": {
+     "claims": 7,
+     "supported": 7,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Review whether the EMI bounce and lender fine were caused by a Kestrel error; if so, reimburse the bank-side error amount and any charges caused by the error, but only as a credit with supervisor approval [KB-POL-REIMB:0]. If the lender fine is an out-of-pocket cost outside the bank, ask for a document and send it to the operations manager regardless of amount [KB-POL-REIMB:0]."
+   },
+   {
+    "id": "w-v19",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-RUNBOOK-INCIDENT:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 2.74,
+    "first_token_s": 2.33,
+    "tokens": 3196,
+    "cost_inr": 0.2631,
+    "groundedness": {
+     "claims": 4,
+     "supported": 3,
+     "unsupported": [
+      "There is no policy found for who the duty manager is to call if the card system is down."
+     ]
+    },
+    "audit": null,
+    "answer": "Check the incident process and tell the customer you\u2019re checking; if the core banking or card system is down, record the details in a ticket and set a callback, and do not raise credits or reversals [KB-RUNBOOK-INCIDENT:0]. I couldn\u2019t find policy for who the duty manager is to call if the card system is down."
+   },
+   {
+    "id": "w-v20",
+    "ok": true,
+    "checks": {},
+    "intent": "transfer_not_received_by_recipient",
+    "route": "tools",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 2.71,
+    "first_token_s": 2.57,
+    "tokens": 3318,
+    "cost_inr": 0.2536,
+    "groundedness": {
+     "claims": 1,
+     "supported": 0,
+     "unsupported": [
+      "The agent could not find policy for this."
+     ]
+    },
+    "audit": null,
+    "answer": "I couldn\u2019t find policy for this."
+   }
+  ]
+ },
+ "big": {
+  "summary": {
+   "answers": 18,
+   "zero_unsupported": 2,
+   "claims": 127,
+   "supported": 104,
+   "workflow_with_draft": 0,
+   "workflow_no_draft": 8,
+   "other": 15
+  },
+  "runs": [
+   {
+    "id": "w-v01",
+    "ok": true,
+    "checks": {},
+    "intent": "request_refund",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-CHARGEBACK:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 6.32,
+    "first_token_s": 4.21,
+    "tokens": 3428,
+    "cost_inr": 0.9921,
+    "groundedness": {
+     "claims": 7,
+     "supported": 5,
+     "unsupported": [
+      "The customer does not need to provide the transaction id, merchant name, amount, and date separately.",
+      "If a draft is already in Copilot, review it and click 'Send to supervisor.'"
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer we can consider a chargeback for a counterfeit item as \u201cgoods significantly not as described,\u201d and ask them to send: their written description of the issue plus any proof they contacted the merchant, such as email or chat [KB-SOP-CHARGEBACK:0]. You\u2019ll use the transaction record for the transaction id, merchant name, amount, and date, so they don\u2019t need to provide those separately [KB-SOP-CHARGEBACK:0]. If a draft is already in Copilot, review it and click \u201cSend to supervisor,\u201d since every chargeback needs approval [KB-SOP-CHARGEBACK:0]."
+   },
+   {
+    "id": "w-v02",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_fee_charged",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-FEES:0",
+     "KB-POL-REFUND:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.0,
+    "first_token_s": 3.63,
+    "tokens": 3276,
+    "cost_inr": 0.9351,
+    "groundedness": {
+     "claims": 8,
+     "supported": 7,
+     "unsupported": [
+      "The agent should click \u201cSend to supervisor.\u201d"
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer you can request a one-time goodwill review for this fee type if they haven\u2019t had one in the last 12 months, but you can\u2019t promise the reversal yet [KB-POL-FEES:0][KB-POL-REFUND:0]. Identify the fee on the statement and its reason code, then review the drafted fee reversal and click \u201cSend to supervisor,\u201d since every fee reversal or bank-paid credit needs supervisor approval [KB-POL-FEES:0][KB-POL-REFUND:0]."
+   },
+   {
+    "id": "w-v03",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_not_recognised",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-LIAB-A:1",
+     "KB-POL-LIAB-A:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.39,
+    "first_token_s": 3.76,
+    "tokens": 3901,
+    "cost_inr": 1.065,
+    "groundedness": {
+     "claims": 5,
+     "supported": 5,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "First, confirm whether she shared any OTP, PIN or card details before quoting liability; the bank must prove customer liability, and you must not tell the customer any figure the calculator did not produce [KB-POL-LIAB-A:1]. If this was a third-party breach and she reported on day 5, liability is the transaction value or the applicable cap, whichever is lower; if there was customer negligence, she bears the full loss until reporting [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "w-v04",
+    "ok": true,
+    "checks": {},
+    "intent": "request_refund",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REFUND:0",
+     "KB-SOP-CHARGEBACK:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.1,
+    "first_token_s": 3.57,
+    "tokens": 3451,
+    "cost_inr": 0.9847,
+    "groundedness": {
+     "claims": 6,
+     "supported": 6,
+     "unsupported": []
+    },
+    "audit": null,
+    "answer": "Ask for the merchant\u2019s refund date and ARN first. If it\u2019s been fewer than 7 working days since the merchant processed the partial refund, explain that merchant refunds normally arrive in 5 to 7 working days and no action is needed yet [KB-POL-REFUND:0]. If more than 7 working days have passed and they have the ARN, open a `refund_trace`; if there\u2019s no ARN, tell them to contact the merchant first, and if the merchant refuses to return the rest, a chargeback may be possible [KB-POL-REFUND:0][KB-SOP-CHARGEBACK:0]."
+   },
+   {
+    "id": "w-v05",
+    "ok": true,
+    "checks": {},
+    "intent": "transfer_not_received_by_recipient",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-TAT:0",
+     "KB-FAQ-UPI:0",
+     "KB-SCRIPT-FAILED:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.68,
+    "first_token_s": 3.65,
+    "tokens": 3429,
+    "cost_inr": 0.9496,
+    "groundedness": {
+     "claims": 5,
+     "supported": 3,
+     "unsupported": [
+      "The return timing depends on the payment rail.",
+      "No policy was found for rails other than UPI/IMPS."
+     ]
+    },
+    "audit": null,
+    "answer": "First, check the transaction shows as \u201cfailed, debited,\u201d then tell the customer the return depends on the rail: UPI or IMPS is due back by T + 1 day; if it\u2019s already past that, \u20b9100 per day of delay is credited automatically [KB-POL-TAT:0][KB-FAQ-UPI:0][KB-SCRIPT-FAILED:0]. If it isn\u2019t UPI/IMPS, I couldn\u2019t find policy for this."
+   },
+   {
+    "id": "w-v06",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REIMB:0",
+     "KB-MATRIX:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.06,
+    "first_token_s": 3.61,
+    "tokens": 4019,
+    "cost_inr": 1.0825,
+    "groundedness": {
+     "claims": 4,
+     "supported": 3,
+     "unsupported": [
+      "A \u20b975,000 credit cannot be finalised on the call and needs approval."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer the \u20b975,000 credit cannot be finalised on the call and needs approval; then review the draft and click \u201cSend to supervisor\u201d [KB-POL-REIMB:0] [KB-MATRIX:0]. For a credit of \u20b975,000, the approver is the Operations manager, not the regional operations head, unless it\u2019s a repeat dispute within the last 90 days, in which case it goes one level higher to the regional operations head [KB-MATRIX:0]."
+   },
+   {
+    "id": "w-v07",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-ESC:0",
+     "KB-MATRIX:0",
+     "KB-DIR-ORG:0",
+     "KB-TPL-NOTIFY:0"
+    ],
+    "output_verdict": "block",
+    "violations": [
+     "contains unmasked personal data"
+    ],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.42,
+    "first_token_s": 3.6,
+    "tokens": 3619,
+    "cost_inr": 1.0504,
+    "groundedness": null,
+    "audit": null,
+    "answer": "[The drafted answer was withheld by the output check: contains unmasked personal data.]\n\nFacts from bank systems:\n- intent: out_of_scope (route rag)"
+   },
+   {
+    "id": "w-v08",
+    "ok": true,
+    "checks": {},
+    "intent": "compromised_card",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-GUIDE-NCRP:0",
+     "KB-SOP-BLOCK:0",
+     "KB-SCRIPT-FRAUD:0",
+     "KB-POL-LIAB-B:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.39,
+    "first_token_s": 3.62,
+    "tokens": 3626,
+    "cost_inr": 1.0166,
+    "groundedness": {
+     "claims": 7,
+     "supported": 6,
+     "unsupported": [
+      "Whether they shared any OTP, PIN or card details affects the liability classification."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell them to report it immediately to the national cybercrime helpline 1930 or at cybercrime.gov.in, and capture the acknowledgement number in the ticket [KB-GUIDE-NCRP:0]. You should also block the card right away after minimum level-1 verification, then ask whether they shared any OTP, PIN or card details because that affects the liability classification [KB-SOP-BLOCK:0] [KB-SCRIPT-FRAUD:0]. If the transactions are on or after 1 January 2027, installing a malicious app can count as customer negligence [KB-POL-LIAB-B:0]."
+   },
+   {
+    "id": "w-v09",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_not_recognised",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-LIAB-A:0",
+     "KB-POL-LIAB-A:1"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.2,
+    "first_token_s": 3.54,
+    "tokens": 4091,
+    "cost_inr": 1.1191,
+    "groundedness": {
+     "claims": 6,
+     "supported": 5,
+     "unsupported": [
+      "Not receiving the SMS alert can matter, but it does not by itself settle liability."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer that not receiving the SMS alert can matter, but it does not by itself settle liability. For pre-2027 transactions, zero liability for a third-party breach depends on when they notified the bank after receiving the bank\u2019s alert, and the bank must prove any customer liability [KB-POL-LIAB-A:0] [KB-POL-LIAB-A:1]. Next, confirm whether they shared any OTP, PIN or card details, because customer negligence changes liability and the customer bears losses until reporting [KB-POL-LIAB-A:0]."
+   },
+   {
+    "id": "w-v10",
+    "ok": true,
+    "checks": {},
+    "intent": "extra_charge_on_statement",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-FEES:0",
+     "KB-POL-REFUND:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.02,
+    "first_token_s": 3.65,
+    "tokens": 3345,
+    "cost_inr": 0.9428,
+    "groundedness": {
+     "claims": 9,
+     "supported": 8,
+     "unsupported": [
+      "The agent should click \u201cSend to supervisor\u201d."
+     ]
+    },
+    "audit": null,
+    "answer": "Yes\u2014if this is the cheque return fee on the statement, you can position it as a one-time goodwill fee reversal for a long-standing customer, but only at most once in 12 months for that fee type [KB-POL-FEES:0]. Review the drafted fee reversal for \u20b9590 and click \u201cSend to supervisor\u201d; every fee reversal or goodwill credit needs supervisor approval, so do not promise it as final on the call [KB-POL-FEES:0] [KB-POL-REFUND:0]."
+   },
+   {
+    "id": "w-v11",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-GUIDE-PII:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.53,
+    "first_token_s": 3.4,
+    "tokens": 3993,
+    "cost_inr": 1.0709,
+    "groundedness": {
+     "claims": 5,
+     "supported": 4,
+     "unsupported": [
+      "Unmasked data in tickets or notes can trigger compliance findings."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the agent not to include the full Aadhaar in the copilot note; if needed, mask it as `XXXX-XXXX-9012` only [KB-GUIDE-PII:0]. Full personal data must never be stored or sent in full, and unmasked data in tickets or notes can trigger compliance findings [KB-GUIDE-PII:0]. Never paste raw customer data into tools outside approved bank systems [KB-GUIDE-PII:0]."
+   },
+   {
+    "id": "w-v12",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-TPL-NOTIFY:0",
+     "KB-SOP-SHADOW:0",
+     "KB-POL-LIAB-A:1"
+    ],
+    "output_verdict": "block",
+    "violations": [
+     "unapproved promise: 'has been credited'"
+    ],
+    "raw_promise": true,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.93,
+    "first_token_s": 3.82,
+    "tokens": 3695,
+    "cost_inr": 1.0338,
+    "groundedness": null,
+    "audit": null,
+    "answer": "[The drafted answer was withheld by the output check: unapproved promise: 'has been credited'.]\n\nFacts from bank systems:\n- intent: out_of_scope (route rag)"
+   },
+   {
+    "id": "w-v13",
+    "ok": true,
+    "checks": {},
+    "intent": "request_refund",
+    "route": "action",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REFUND:0",
+     "KB-SOP-CHARGEBACK:0",
+     "KB-NOTE-ACQ:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.69,
+    "first_token_s": 3.86,
+    "tokens": 3611,
+    "cost_inr": 1.0398,
+    "groundedness": {
+     "claims": 8,
+     "supported": 6,
+     "unsupported": [
+      "The customer reports a promised refund not received after 30 days.",
+      "The agent should then review the draft and click \u201cSend to supervisor\u201d."
+     ]
+    },
+    "audit": null,
+    "answer": "Ask the customer for the merchant\u2019s refund reference (ARN) and the refund date first [KB-POL-REFUND:0]. Since they report a promised refund not received after 30 days, a chargeback may be possible under reason code `refund_not_processed`, but you need the transaction record plus the customer\u2019s written description and proof they contacted the airline before initiation [KB-SOP-CHARGEBACK:0][KB-NOTE-ACQ:0]. We can\u2019t draft yet because transaction lookup failed; get account ID or card last 4, then review the draft and click \u201cSend to supervisor\u201d because every chargeback needs approval [KB-SOP-CHARGEBACK:0]."
+   },
+   {
+    "id": "w-v14",
+    "ok": true,
+    "checks": {},
+    "intent": "card_payment_not_recognised",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SCRIPT-FRAUD:0",
+     "KB-POL-LIAB-B:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.97,
+    "first_token_s": 3.43,
+    "tokens": 3646,
+    "cost_inr": 1.0251,
+    "groundedness": {
+     "claims": 9,
+     "supported": 8,
+     "unsupported": [
+      "If a draft/shadow credit is already prepared, ask them to review it and click 'Send to supervisor'."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer you can\u2019t guarantee in writing that the money will definitely come back yet; first follow the fraud script, block the card, and confirm whether they shared any OTP/PIN/card details and whether they reported to 1930, because liability depends on that classification [KB-SCRIPT-FRAUD:0] [KB-POL-LIAB-B:0]. If a draft/shadow credit is already prepared, ask them to review it and click \u201cSend to supervisor,\u201d and only explain the calculator result\u2014never promise a final refund before approval [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "w-v15",
+    "ok": true,
+    "checks": {},
+    "intent": "lost_or_stolen_card",
+    "route": "action",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-SOP-IDV:0",
+     "KB-SOP-BLOCK:0",
+     "KB-SCRIPT-FRAUD:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.21,
+    "first_token_s": 3.4,
+    "tokens": 3345,
+    "cost_inr": 0.9615,
+    "groundedness": {
+     "claims": 10,
+     "supported": 9,
+     "unsupported": [
+      "Whether they shared those details affects later unauthorised-transaction handling."
+     ]
+    },
+    "audit": null,
+    "answer": "Do Level 1 IDV first using the registered mobile match and date of birth; until that passes, don\u2019t do any account lookup or action draft, and if it fails, offer a branch visit per KB-REF-1 [KB-SOP-IDV:0]. Once Level 1 is complete, block the lost card immediately, confirm it\u2019s blocked, and note the block time; a replacement can then be ordered [KB-SOP-BLOCK:0]. Also ask whether they shared any PIN, OTP, or card details, as that affects any later unauthorised-transaction handling [KB-SCRIPT-FRAUD:0]."
+   },
+   {
+    "id": "w-v16",
+    "ok": true,
+    "checks": {},
+    "intent": "extra_charge_on_statement",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-FEES:0",
+     "KB-POL-DUP:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.65,
+    "first_token_s": 3.91,
+    "tokens": 3343,
+    "cost_inr": 0.9469,
+    "groundedness": {
+     "claims": 11,
+     "supported": 10,
+     "unsupported": [
+      "The duplicate card issuance fee was charged in error."
+     ]
+    },
+    "audit": null,
+    "answer": "First verify the caller to level 2 with OTP (KB-REF-1); at level 0 you can\u2019t draft the fee reversal yet per the case facts. Once verified, if the duplicate card issuance fee was charged in error, draft a fee reversal using the statement amount and reason code, then send it to supervisor\u2014do not promise the reversal before approval [KB-POL-FEES:0]. If you need customer wording, say you\u2019ll raise it for supervisor approval and they\u2019ll get an SMS with the outcome [KB-POL-DUP:0]."
+   },
+   {
+    "id": "w-v17",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-LIAB-A:0",
+     "KB-STD-AUDIT:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.08,
+    "first_token_s": 3.62,
+    "tokens": 3918,
+    "cost_inr": 1.0581,
+    "groundedness": {
+     "claims": 8,
+     "supported": 7,
+     "unsupported": [
+      "Public holidays do not change the rule for pre-1 Jan 2027 unauthorised transactions."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer public holidays do not change this rule: for pre-1 Jan 2027 unauthorised transactions, the count is in working days based on the customer\u2019s home branch schedule, excluding the alert-received date; check KB-CAL for whether that holiday was a branch working day [KB-POL-LIAB-A:0]. Also record the report date/time and alert date, plus the policy/rule applied, in the case notes [KB-STD-AUDIT:0]."
+   },
+   {
+    "id": "w-v18",
+    "ok": true,
+    "checks": {},
+    "intent": "extra_charge_on_statement",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-POL-REIMB:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 5.13,
+    "first_token_s": 3.71,
+    "tokens": 3597,
+    "cost_inr": 0.9985,
+    "groundedness": {
+     "claims": 9,
+     "supported": 5,
+     "unsupported": [
+      "There is a draft reimbursement to review.",
+      "The draft reimbursement is populated from the transaction/fee records.",
+      "The agent should click \u201cSend to supervisor\u201d.",
+      "The agent should not promise the credit before approval."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer we can consider reimbursement because this was a bank-side error: Kestrel reimburses the customer\u2019s loss and any charges caused by the error, and external out-of-pocket costs like a lender late fee need supporting documents and must go to the operations manager [KB-POL-REIMB:0]. Review whether the draft reimbursement is populated from the transaction/fee records, then click \u201cSend to supervisor\u201d; do not promise the credit before approval [KB-POL-REIMB:0]."
+   },
+   {
+    "id": "w-v19",
+    "ok": true,
+    "checks": {},
+    "intent": "out_of_scope",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-RUNBOOK-INCIDENT:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.38,
+    "first_token_s": 3.59,
+    "tokens": 3270,
+    "cost_inr": 0.9007,
+    "groundedness": {
+     "claims": 5,
+     "supported": 3,
+     "unsupported": [
+      "The policy was not found / the agent should stop.",
+      "No duty manager contact is provided here."
+     ]
+    },
+    "audit": null,
+    "answer": "I couldn't find policy for this and stop. If the card system is down, record the customer\u2019s details in a ticket and set a callback; do not raise credits or reversals [KB-RUNBOOK-INCIDENT:0]. If more than 10 agents are affected, the duty manager declares an incident, but no duty manager contact is provided here [KB-RUNBOOK-INCIDENT:0]."
+   },
+   {
+    "id": "w-v20",
+    "ok": true,
+    "checks": {},
+    "intent": "transfer_not_received_by_recipient",
+    "route": "rag",
+    "draft": null,
+    "refusal": null,
+    "blocked": false,
+    "citations": [
+     "KB-FAQ-UPI:0"
+    ],
+    "output_verdict": "allow",
+    "violations": [],
+    "raw_promise": false,
+    "shipped_promise": false,
+    "raw_invented_citation": false,
+    "composed": true,
+    "latency_s": 4.82,
+    "first_token_s": 3.87,
+    "tokens": 3213,
+    "cost_inr": 0.934,
+    "groundedness": {
+     "claims": 5,
+     "supported": 4,
+     "unsupported": [
+      "Follow the liability policy under R17-6ii."
+     ]
+    },
+    "audit": null,
+    "answer": "Tell the customer: if money left the account on a UPI collect request but the merchant hasn\u2019t received it, the reversal is due by T+1 day for UPI/IMPS transfer-not-received cases; after that, \u20b9100 per day of delay is credited automatically [KB-FAQ-UPI:0]. If this was a collect request from a stranger, treat it as possible fraud and follow the liability policy under R17-6ii; customers never need to enter their UPI PIN to receive money [KB-FAQ-UPI:0]."
+   }
+  ]
+ }
+}

@@ -38,11 +38,11 @@ def setup_scope_db() -> None:
         ingest_corpus(conn, get_settings(), make_embedder(get_settings()))
 
 
-def main(out: str) -> None:
+def main(out: str, match: re.Pattern = FEE_WORDS) -> None:
     setup_scope_db()
     from evals.scope_eval import PLAN, classify
     items = [i for i in yaml.safe_load((ROOT / "evals" / "scope_set.yaml").read_text())["items"]
-             if FEE_WORDS.search(i["note"])]
+             if match.search(i["note"])]
     res: dict[str, list] = {}
     for c, reps in PLAN.items():
         os.environ.update({k: v for k, v in CONFIGS[c].items() if k.endswith("_MODEL") or k == "MODEL_PROFILE"})
@@ -59,4 +59,6 @@ def main(out: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "reports" / "fee-scope-after.json"))
+    # optional 2nd argument: a regex over the note, instead of the fee words (D60 used money words)
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "reports" / "fee-scope-after.json"),
+         re.compile(sys.argv[2], re.I) if len(sys.argv) > 2 else FEE_WORDS)
