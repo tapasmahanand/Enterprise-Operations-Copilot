@@ -122,41 +122,51 @@ Offline / no key: set `EMBEDDING_PROVIDER=fake` in `.env` (lexical test embeddin
 
 ## Results (Milestone 4)
 
-Full numbers: [reports/eval.md](reports/eval.md) (run 4, 25 tuned scenarios plus 8
-held-out, each 3 times per model). Run it yourself with `make eval` (about 30 min, roughly ₹230
-at list prices, ₹88/USD assumed). Earlier runs are kept in `reports/eval-run*.md`.
+Full numbers: [reports/eval.md](reports/eval.md) (run 5, 26 Nov 2026, on `main` after access-controlled
+RAG, the outbox, NATS and the MCP connector; 25 tuned scenarios plus 8 held-out, each 3 times per
+model). Run it yourself with `make eval` (about 30 min, roughly ₹230 at list prices, ₹88/USD
+assumed). Earlier runs are kept in `reports/eval-run*.md`.
 
-**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 4):
+**Model comparison** (Supervisor + Composer; 33 scenarios × 3 repeats, run 5, run 4 in brackets):
 
 | | gpt-5.4-mini (production) | gpt-5.4 |
 |---|---|---|
-| Scenario runs passing | 86/99 (87%) | 90/99 (91%) |
-| Held-out scenarios passing all repeats | **7/8** | **6/8** |
-| Outcome correct (draft / no draft / amount / tier) | 97% | 94% |
-| Intent label correct | 92% | 100% |
-| Groundedness: supported claims (LLM judge) | 91% | 91% |
-| Answers with zero unsupported claims | 48% | 37% |
-| BANKING77 intent accuracy (n=200) | 77% | 80% |
-| Out-of-scope correctly refused | 80% | 70% |
-| Latency p50 / p95 | 3.8 s / 4.4 s | 5.3 s / 6.2 s |
-| Cost per copilot answer | ₹0.23 | ₹0.77 |
+| Scenario runs passing | 95/99 (86/99) | 94/99 (90/99) |
+| Held-out scenarios passing all repeats | **8/8** (7/8) | **8/8** (6/8) |
+| Outcome correct (draft / no draft / amount / tier) | 97% (97%) | 97% (94%) |
+| Intent label correct | 98% (92%) | 100% (100%) |
+| Cites the governing policy | 100% (90%) | 96% (94%) |
+| Groundedness: supported claims (LLM judge) | 89% (91%) | 88% (91%) |
+| Answers with zero unsupported claims | 32% (48%) | 31% (37%) |
+| BANKING77 intent accuracy (n=200) | 73% (77%) | 77% (80%) |
+| Out-of-scope correctly refused | 71% (80%) | 71% (70%) |
+| Latency p50 / p95 | 4.0 s / 6.0 s (3.8 / 4.4) | 5.6 s / 6.3 s (5.3 / 6.2) |
+| Cost per copilot answer | ₹0.27 (₹0.23) | ₹0.92 (₹0.77) |
 
-Production stays on mini. gpt-5.4 gets intent labels right more often, but that does not turn
-into better outcomes: it drafts the right action *less* often (94% vs 97%), does worse on the
-held-out set, and refused an in-scope duplicate-charge refund in all three repeats (H07), for
-3.4× the cost and 1.5 s more latency. Its 4-point pass-rate lead is about the size of the
-run-to-run noise we measured (±3 points). Treat both models as roughly equal on this suite.
+What moved, and why we think so:
+- **Pass rate up** (86 → 95 on mini). Most of it matches the D48 scope fix, which already
+  measured 91/99 on mini without the judge ([reports/eval-scopefix.md](reports/eval-scopefix.md)).
+  The remaining failures: S08b (fee reversal routed wrong in every repeat, a known open issue)
+  on both models, plus S09 (intent, once) on mini and S15 (citation, twice) on gpt-5.4.
+- **Out-of-scope refusals down** (80% → 71%) and **cost and latency up** are the trade-off D48
+  already reported for the KB re-check: more borderline requests are answered from documents.
+- **Zero-unsupported-claim answers down** (48% → 32%). That's one judge pass over about 28
+  answers. Most flagged "claims" are procedural steps such as "click Send to supervisor", the
+  same pattern as in run 4. We have not established whether this is a real drop or judge noise.
+- **BANKING77 accuracy down 3 to 4 points** on n=200. Inside the noise of a 200-query sample,
+  but not shown to be noise.
+
+Production stays on mini: on this run the two models are equal on pass rate and outcomes, and
+gpt-5.4 costs 3.4× as much.
 
 **Ops and compliance** (production config): 0 unapproved promises reached the agent; 0 invented
 citations; 100% of 21 drafted actions carry a complete audit trail; the TAT sweeper caught 6/6
 breaches in a 60-case simulation, warning a median 2 days ahead. The 10% deadline-breach rate
 depends on an **assumed** approval delay; it measures staffing, not the software.
 
-The report says the model "attempted" 3 promises and 4% of answers were withheld. **Those were
-guard false positives**, not promises: all three were H07 answers telling the agent *not* to
-guarantee the refund ("do not guarantee the refund", "you can't guarantee the refund today"),
-confirmed by re-running H07 and reading the raw text. The promise check now ignores negated
-phrases (D47, with tests). Not re-run after the fix, so the report keeps the measured numbers.
+Run 5: the output check withheld 1 of 87 composed answers (H06, "is approved"). The raw
+text isn't stored, so we can't say whether it was a real promise or another guard false positive
+like the three negated H07 phrases found in run 4 (fixed in D47).
 
 **Compliance scan accuracy** (226 hand-labelled Enron emails, stratified, population-weighted;
 [evals/compliance/README.md](evals/compliance/README.md)): precision **71%** (95% CI 38–89%),
