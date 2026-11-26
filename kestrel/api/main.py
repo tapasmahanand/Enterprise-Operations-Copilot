@@ -375,6 +375,17 @@ def get_job(job_id: str, user: User = Depends(current_user)) -> dict:
         raise HTTPException(404, "job not found")
 
 
+# --- event pipeline ----------------------------------------------------------------------
+
+@app.get("/ops/events")
+def ops_events(user: User = Depends(current_user)) -> dict:
+    """Outbox lag and approval-to-post latency (D56)."""
+    require(user, "supervisor", "compliance")
+    from kestrel import outbox
+    from kestrel.events.metrics import snapshot
+    return {"bus": outbox.bus_mode(), **snapshot()}
+
+
 # --- audit -------------------------------------------------------------------------------
 
 @app.get("/audit")

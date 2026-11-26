@@ -20,7 +20,7 @@ still matches what was approved.
 from __future__ import annotations
 
 import logging
-from datetime import date
+import time
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -33,7 +33,7 @@ from kestrel.db import connect
 from kestrel.faults import crash_point
 from kestrel.tools.base import ToolError, ToolResult
 from kestrel.tools.bank import draft_customer_notification, initiate_chargeback
-from kestrel.tracing import root_span, traced
+from kestrel.tracing import record_event, root_span, traced
 
 log = logging.getLogger("case_graph")
 
@@ -85,7 +85,7 @@ def execute_action(state: CaseState) -> dict:
             receipt = ledger.post_credit_and_advance(
                 case_id=cid, approval_id=state["approval_id"], account_id=a["account_id"], txn_id=a.get("txn_id"),
                 amount_inr=a["amount_inr"], kind=a.get("kind", "shadow_credit"),
-                reason=a.get("reason", "approved by supervisor"))
+                reason=a.get("reason", "approved by supervisor"), card_last4=a.get("card_last4"))
             res = ToolResult(ok=True, data={k: v for k, v in receipt.items() if k != "idempotency_key"})
         except ToolError as e:
             res = ToolResult(ok=False, error=str(e))
@@ -117,15 +117,13 @@ def notify(state: CaseState) -> dict:
     if state.get("status") == "failed":
         return {}
     ticket = state["case_id"]
+    if d["decision"] == "approve" and a["action"] in ("credit", "fee_reversal"):
+        # The customer notification for a posted credit is drafted by the CreditPosted
+        # consumer (notify_credit_posted), not here: the credit transaction emitted that event.
+        return {"_trace": {"detail": {"notification": "by CreditPosted consumer"}}}
     if d["decision"] == "approve":
-        fields = {"amount": f"{a['amount_inr']:,}", "last4": a.get("card_last4") or "XXXX",
-                  "ticket_id": ticket,
-                  # value date = when the credit was actually posted, not the RBI due date
-                  "value_date": (state.get("credit") or {}).get("posted_at", date.today().isoformat())[:10]}
-        tpl = {"fee_reversal": "fee_reversed", "chargeback": "chargeback_raised"}.get(a["action"], "credit_approved")
-        if tpl == "chargeback_raised":
-            fields.pop("value_date")
-        final = "closed"
+        fields = {"amount": f"{a['amount_inr']:,}", "last4": a.get("card_last4") or "XXXX", "ticket_id": ticket}
+        tpl, final = "chargeback_raised", "closed"
     else:
         fields = {"ticket_id": ticket, "reason": d.get("reason") or "not approved after review"}
         tpl, final = "credit_rejected", "rejected"
@@ -134,6 +132,27 @@ def notify(state: CaseState) -> dict:
               "decision": d}
     _set_case(ticket, final, result)
     return {"notification": res.data, "status": final, "_trace": {"detail": {"template": tpl}}}
+
+
+def notify_credit_posted(payload: dict) -> dict:
+    """CreditPosted consumer: draft the customer SMS and close the case. Idempotent: the
+    notification is unique per case, and the case only moves from 'approved' to 'closed'."""
+    cid = payload["case_id"]
+    tpl = "fee_reversed" if payload.get("kind") == "fee_reversal" else "credit_approved"
+    fields = {"amount": f"{payload['amount_inr']:,}", "last4": payload.get("card_last4") or "XXXX",
+              "ticket_id": cid, "value_date": payload["posted_at"][:10]}   # value date = actual posting
+    t0 = time.perf_counter()
+    res = draft_customer_notification(case_id=cid, template=tpl, fields=fields)
+    if not res.ok:
+        raise RuntimeError(f"notification for {cid} failed: {res.error}")   # retried by the dispatcher
+    with connect() as conn:
+        conn.execute("""UPDATE cases SET status = 'closed', updated_at = now(),
+                               result = COALESCE(result, '{}'::jsonb) || %s
+                        WHERE case_id = %s AND status = 'approved'""", (Jsonb({"notification": res.data}), cid))
+        conn.commit()
+    record_event(cid, cid, "notify", "ok", int((time.perf_counter() - t0) * 1000),
+                 {"template": tpl, "event_id": payload.get("event_id"), "consumer": "notifier"})
+    return res.data
 
 
 def build_case_graph():
@@ -237,7 +256,8 @@ def reconcile() -> dict[str, int]:
                 decision_event(conn, case_id, approval_id, astate, reason, approver, payload)
                 conn.commit()
             resumed += 1
-    outbox.dispatch_due()
+    if outbox.bus_mode() == "postgres":
+        outbox.dispatch_due()   # with a broker, the relay publishes these (D56)
     if started or resumed:
         log.info("reconcile: started=%d resumed=%d", started, resumed)
     return {"started": started, "resumed": resumed}

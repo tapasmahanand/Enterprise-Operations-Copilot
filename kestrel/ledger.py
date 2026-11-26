@@ -72,7 +72,7 @@ def check_binding(conn: psycopg.Connection, approval_id: str) -> str | None:
 
 
 def post_credit_and_advance(*, case_id: str, approval_id: str, account_id: str, txn_id: str | None,
-                            amount_inr: int, kind: str, reason: str) -> dict[str, Any]:
+                            amount_inr: int, kind: str, reason: str, card_last4: str | None = None) -> dict[str, Any]:
     """Mock ledger: credit + receipt + case status + CreditPosted, all in one transaction.
     Returns the receipt; `reused_receipt` is True when this approval had already posted."""
     key = f"credit:{approval_id}"
@@ -101,7 +101,7 @@ def post_credit_and_advance(*, case_id: str, approval_id: str, account_id: str, 
                                 updated_at = now() WHERE case_id = %s""", (Jsonb({"credit": receipt}), case_id))
                 outbox.enqueue(conn, "CreditPosted", case_id,
                                {"case_id": case_id, "approval_id": approval_id, "account_id": account_id,
-                                "txn_id": txn_id, **receipt},
+                                "txn_id": txn_id, "card_last4": card_last4, **receipt},
                                event_id=outbox.event_id_for(approval_id, "credit-posted"))
         except psycopg.errors.UniqueViolation:
             # Lost a race with another executor for the same approval: its receipt is the answer.

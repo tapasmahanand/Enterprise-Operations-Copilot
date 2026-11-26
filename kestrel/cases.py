@@ -159,7 +159,9 @@ def decide(approval_id: str, decision: str, approver_id: str | None, reason: str
         conn.commit()
     case_id = won[0]
     crash_point("after_approval_commit")   # recovery test hook: decided, event not yet handled
-    if os.environ.get("OUTBOX_INLINE_DISPATCH", "1") == "1":
+    # With a broker (NATS_URL set) the relay publishes and a consumer executes (D56); without
+    # one, the API dispatches inline so the supervisor sees the outcome.
+    if outbox.bus_mode() == "postgres" and os.environ.get("OUTBOX_INLINE_DISPATCH", "1") == "1":
         try:
             outbox.dispatch_due(limit=1, event_id=event_id)
         except Exception:  # noqa: BLE001 - the decision is committed; the worker retries the event
