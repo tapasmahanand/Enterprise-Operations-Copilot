@@ -264,14 +264,17 @@ async function loadQueue() {
       <td><div class="row"><button class="primary" data-a="${esc(a.approval_id)}" data-d="approve">Approve</button>
       <button class="ghost" data-a="${esc(a.approval_id)}" data-d="reject">Reject</button></div></td></tr>`;
   }).join("");
-  tb.querySelectorAll("button").forEach(b => b.onclick = () => decide(b.dataset.a, b.dataset.d));
+  const shown = Object.fromEntries(body.map(a => [a.approval_id, { expected_txn_id: a.action.txn_id,
+    expected_amount_inr: a.action.amount_inr, expected_draft_version: a.draft_version ?? undefined }]));
+  tb.querySelectorAll("button").forEach(b => b.onclick = () => decide(b.dataset.a, b.dataset.d, shown[b.dataset.a]));
 }
 $("refresh").onclick = loadQueue;
 
-async function decide(id, decision) {
+async function decide(id, decision, shown) {
   let reason = decision === "approve" ? "evidence reviewed" : prompt("Reason for rejection?");
   if (decision === "reject" && !reason) return;
-  const { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason }) });
+  // What this screen showed goes with the decision, so a changed case is refused, not approved (D55).
+  const { status, body } = await api(`/approvals/${id}`, { method: "POST", body: JSON.stringify({ decision, reason, ...(shown || {}) }) });
   $("decided").classList.remove("hidden");
   if (status === 200) {
     const n = body.result && body.result.notification ? body.result.notification.body : "";

@@ -8,8 +8,13 @@ Restart safety rests on three things:
 2. every node is safe to re-run (LangGraph re-executes an interrupted node from its
    start on resume, and a crash can land between a side effect and its checkpoint):
    approval rows, credits and notifications are all keyed by case_id;
-3. `reconcile()` at startup finishes any case whose decision was recorded but whose
-   resume never ran (the app died between the two).
+3. a decision is committed together with an outbox event (D55); the event, not the HTTP
+   request, drives the resume, so a crash after the commit is finished by whoever
+   dispatches the outbox next (the worker, or `reconcile()` at boot).
+
+Credits post through `ledger.post_credit_and_advance`: credit, receipt, case status and a
+CreditPosted event in one transaction, keyed by the approval, after checking that the case
+still matches what was approved.
 """
 
 from __future__ import annotations
@@ -22,9 +27,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from psycopg.types.json import Jsonb
 
+from kestrel import ledger, outbox
 from kestrel.checkpoint import get_checkpointer
 from kestrel.db import connect
-from kestrel.tools.bank import draft_customer_notification, initiate_chargeback, submit_credit
+from kestrel.faults import crash_point
+from kestrel.tools.base import ToolError, ToolResult
+from kestrel.tools.bank import draft_customer_notification, initiate_chargeback
 from kestrel.tracing import root_span, traced
 
 log = logging.getLogger("case_graph")
@@ -66,11 +74,24 @@ def route_decision(state: CaseState) -> str:
 def execute_action(state: CaseState) -> dict:
     """Runs only after approval. Every write here is idempotent by case_id (D18)."""
     a, cid = state["action"], state["case_id"]
+    with connect() as conn:
+        mismatch = ledger.check_binding(conn, state["approval_id"])
+    if mismatch:
+        # What would be executed is not what the supervisor approved: post nothing (D55).
+        _set_case(cid, "failed", {"error": f"binding check failed: {mismatch}"})
+        return {"status": "failed", "_trace": {"status": "blocked", "detail": {"binding": mismatch}}}
     if a["action"] in ("credit", "fee_reversal"):
-        res = submit_credit(case_id=cid, account_id=a["account_id"], txn_id=a.get("txn_id"),
-                            amount_inr=a["amount_inr"], kind=a.get("kind", "shadow_credit"),
-                            reason=a.get("reason", "approved by supervisor"))
-        tool, key = "submit_credit", "credit"
+        try:
+            receipt = ledger.post_credit_and_advance(
+                case_id=cid, approval_id=state["approval_id"], account_id=a["account_id"], txn_id=a.get("txn_id"),
+                amount_inr=a["amount_inr"], kind=a.get("kind", "shadow_credit"),
+                reason=a.get("reason", "approved by supervisor"))
+            res = ToolResult(ok=True, data={k: v for k, v in receipt.items() if k != "idempotency_key"})
+        except ToolError as e:
+            res = ToolResult(ok=False, error=str(e))
+        # Recovery test hook: the credit transaction is committed, the graph has not checkpointed.
+        crash_point("after_credit_commit")
+        tool, key = "post_credit_and_advance", "credit"
     elif a["action"] == "chargeback":
         with connect() as conn:
             ev = conn.execute("SELECT evidence FROM cases WHERE case_id = %s", (cid,)).fetchone()[0]
@@ -84,7 +105,8 @@ def execute_action(state: CaseState) -> dict:
         err = res.error if res else f"cannot execute {a['action']!r}"
         _set_case(cid, "failed", {"error": err})
         return {"status": "failed", "_trace": {"status": "error", "detail": {"error": err}}}
-    _set_case(cid, "approved", {key: res.data})
+    if key != "credit":   # credits advance the case inside their own transaction
+        _set_case(cid, "approved", {key: res.data})
     return {"credit": res.data, "status": "approved",
             "_trace": {"detail": {"tool": tool, "result": res.data, "attempts": res.attempts}}}
 
@@ -157,9 +179,34 @@ def resume_case(case_id: str, decision: dict) -> dict:
     snap = g.get_state(_cfg(case_id))
     if not snap.next:  # already finished (e.g. reconcile beat us to it)
         return dict(snap.values)
+    # Paused at the approval interrupt: resume with the decision. Otherwise a node after the
+    # gate crashed mid-run (e.g. after the credit committed): continue from the checkpoint,
+    # and the node re-runs (its writes are idempotent).
+    waiting = any(t.interrupts for t in snap.tasks)
     with root_span(case_id, f"case: resumed on {decision['decision']}", approver_id=decision.get("approver_id")):
-        g.invoke(Command(resume=decision), _cfg(case_id))
+        g.invoke(Command(resume=decision) if waiting else None, _cfg(case_id))
     return dict(g.get_state(_cfg(case_id)).values)
+
+
+def handle_decision_event(payload: dict) -> dict:
+    """Outbox handler for ApprovalGranted / ApprovalRejected: resume the case graph.
+
+    A session-level advisory lock per case keeps two dispatchers (the API's inline attempt,
+    the worker, a broker consumer, reconcile) from running the same case at once; the loser
+    gets Busy and the event is retried. Idempotency still covers a lock lost to a crash."""
+    case_id = payload["case_id"]
+    with connect() as conn:
+        conn.commit()            # connect() ran CREATE EXTENSION; leave that transaction
+        conn.autocommit = True   # the lock must not be tied to a transaction we keep open
+        if not conn.execute("SELECT pg_try_advisory_lock(hashtextextended(%s, 0))", (case_id,)).fetchone()[0]:
+            raise outbox.Busy(case_id)
+        try:
+            if not case_graph().get_state(_cfg(case_id)).values:
+                start_case(case_id, payload["approval_id"], payload["action"])   # never reached its pause
+            return resume_case(case_id, {"decision": payload["decision"], "reason": payload.get("reason"),
+                                         "approver_id": payload.get("approver_id")})
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", (case_id,))
 
 
 def is_waiting(case_id: str) -> bool:
@@ -167,8 +214,9 @@ def is_waiting(case_id: str) -> bool:
 
 
 def reconcile() -> dict[str, int]:
-    """Run at startup. Starts pending cases that never reached their checkpoint, and
-    resumes cases whose decision was recorded but not applied."""
+    """Run at startup (and safe at any time). Starts pending cases that never reached their
+    checkpoint; makes sure every recorded-but-unexecuted decision has an outbox event (a
+    decision from before D55 has none) and dispatches what is due."""
     started = resumed = 0
     with connect() as conn:
         rows = conn.execute(
@@ -180,8 +228,28 @@ def reconcile() -> dict[str, int]:
         if not snap.values:
             start_case(case_id, approval_id, payload); started += 1
         if astate != "pending":
-            resume_case(case_id, {"decision": "approve" if astate == "approved" else "reject",
-                                  "reason": reason, "approver_id": approver}); resumed += 1
+            with connect() as conn:
+                b = ledger.binding_for(conn, approval_id)
+                # Legacy decision with no binding: bind it to its own immutable payload.
+                conn.execute("""UPDATE approvals SET bound_txn_id = %s, bound_amount_inr = %s, bound_draft_version = %s,
+                                bound_action_hash = %s WHERE approval_id = %s AND bound_action_hash IS NULL""",
+                             (b["txn_id"], b["amount_inr"], b["draft_version"], b["action_hash"], approval_id))
+                decision_event(conn, case_id, approval_id, astate, reason, approver, payload)
+                conn.commit()
+            resumed += 1
+    outbox.dispatch_due()
     if started or resumed:
         log.info("reconcile: started=%d resumed=%d", started, resumed)
     return {"started": started, "resumed": resumed}
+
+
+def decision_event(conn, case_id: str, approval_id: str, state: str, reason: str | None, approver_id: str | None,
+                   action: dict) -> str:
+    """The outbox event for a decision, on the caller's transaction. Deterministic id."""
+    kind = "granted" if state == "approved" else "rejected"
+    eid = outbox.event_id_for(approval_id, kind)
+    outbox.enqueue(conn, "ApprovalGranted" if kind == "granted" else "ApprovalRejected", case_id,
+                   {"case_id": case_id, "approval_id": approval_id, "decision": "approve" if kind == "granted" else "reject",
+                    "reason": reason, "approver_id": approver_id, "action": action,
+                    "txn_id": action.get("txn_id"), "amount_inr": action.get("amount_inr")}, event_id=eid)
+    return eid

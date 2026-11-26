@@ -312,6 +312,11 @@ class DecisionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: Literal["approve", "reject"]
     reason: str | None = Field(default=None, max_length=500)
+    # What the supervisor's screen showed (D55). Optional for scripts; the console sends all
+    # three, and a mismatch with the current case is a 409 instead of approving something else.
+    expected_txn_id: str | None = Field(default=None, max_length=64)
+    expected_amount_inr: int | None = Field(default=None, gt=0)
+    expected_draft_version: int | None = Field(default=None, ge=1)
 
 
 @app.post("/approvals/{approval_id}")
@@ -320,7 +325,9 @@ def decide(approval_id: str, body: DecisionIn, user: User = Depends(current_user
     if body.decision == "reject" and not body.reason:
         raise HTTPException(422, "a rejection needs a reason")
     try:
-        out = cases.decide(approval_id, body.decision, None, body.reason, decided_by=user)
+        out = cases.decide(approval_id, body.decision, None, body.reason, decided_by=user,
+                           expected={"txn_id": body.expected_txn_id, "amount_inr": body.expected_amount_inr,
+                                     "draft_version": body.expected_draft_version})
         flush_traces()
         return out
     except cases.NotFound:
@@ -329,6 +336,9 @@ def decide(approval_id: str, body: DecisionIn, user: User = Depends(current_user
         raise HTTPException(403, str(f))
     except cases.Conflict as c:
         return JSONResponse({"detail": "approval already decided", "existing": c.existing}, status_code=409)
+    except cases.Stale as st:
+        return JSONResponse({"detail": "case changed since you opened it; reload the queue",
+                             "expected": st.expected, "actual": st.actual}, status_code=409)
 
 
 # --- async jobs ------------------------------------------------------------------------
