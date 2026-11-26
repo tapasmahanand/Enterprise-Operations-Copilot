@@ -73,6 +73,21 @@ Proof (`tests/integration/test_events_nats.py`, a real `nats-server`, with the e
 
 Limits: single broker node, no TLS or auth on NATS. While the broker is down, reconcile does not bypass it (cases wait). The compose `nats` and `events` services were not started in this sandbox (Docker Hub rate limit), and the tests ran against a downloaded `nats-server` 2.10.22 binary.
 
+## Read-only bank connector over MCP (D57)
+
+`transaction_lookup` and `ticket_lookup` run in a read-only MCP server (`python -m kestrel.connectors.mcp_server`). It has typed inputs and outputs and publishes an output schema. The chat graph's tool node calls it over stdio through one long-lived session. Every call carries an HMAC-signed scope built from the session: the account on the agent's screen, card digits the agent actually typed, and entities from earlier in the call. The connector refuses lookups outside that scope and filters its results to it, so a card number the model invents is refused. A connector timeout (5 s, `MCP_TOOL_TIMEOUT_S`) or crash returns "bank lookup failed …; nothing was drafted", and the console shows it. Credit posting is not in the connector; it stays in the approval worker. `TOOL_TRANSPORT=direct` skips MCP.
+
+Proof (`tests/integration/test_mcp_connector.py`):
+- An MCP client discovers exactly the two tools, both marked read-only and both with output schemas, and invokes both.
+- Out-of-scope account, card and ticket lookups are refused, as are forged and expired scopes.
+- If the model supplies a card the agent didn't type, the connector refuses it.
+- The hero case runs through the connector.
+- With the connector hanging, the run ends in about 1 s with no draft, no card block and a clear reason, and the next call gets a fresh connector.
+
+Measured locally: about 1 s once, to start the connector, then about 13 ms per lookup against 10 ms direct.
+
+Limits: stdio only. Authenticated Streamable HTTP for a separate deployment is described but not built. The scope key is per process for stdio. A real deployment needs a managed key and short TTLs, and today's TTL is 120 s.
+
 ## Hero demo (unauthorised ₹18,450 card payment)
 
 Sign in as `agent1`. In the UI: press **Ask copilot** (the sample text is pre-filled), then **Send to supervisor**, restart the app, sign in as `ananya` (or `farah` if the case needs an ops manager), open **Supervisor queue** and **Approve**.

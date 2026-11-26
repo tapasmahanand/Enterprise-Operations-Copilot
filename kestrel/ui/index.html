@@ -221,6 +221,8 @@ function showFinal(d) {
   if (d.script) { $("script-card").classList.remove("hidden"); $("script").textContent = d.script; }
   const f = [];
   if (d.card_block && d.card_block.error) f.push(`<div><span class="pill bad">card not blocked</span> <span class="muted">${esc(d.card_block.error)}</span></div>`);
+  if (d.no_draft_reason && !d.draft && /^bank lookup failed/.test(d.no_draft_reason))
+    f.push(`<div><span class="pill bad">bank connector</span> <span class="muted">${esc(d.no_draft_reason)}</span></div>`);
   if (d.refusal) f.push(`<div style="margin-top:6px"><span class="pill bad">${esc(d.refusal.rule_id)}</span> <span class="muted">${esc(d.refusal.reason)}</span></div>`);
   if (d.card_block && d.card_block.status) f.push(`<div><span class="pill ok">card ${esc(d.card_block.last4)} blocked</span> <span class="muted">${esc(d.card_block.blocked_at || "")}</span></div>`);
   if (d.calc) f.push(`<div style="margin-top:6px">Customer liability <b>${inr(d.calc.customer_liability_inr)}</b> · bank ${inr(d.calc.bank_liability_inr)}</div>

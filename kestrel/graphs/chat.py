@@ -46,7 +46,9 @@ from kestrel.retrieval.search import vector_search
 from kestrel.rules.approval import approval_requirement
 from kestrel.rules.calculator import failed_txn_compensation
 from kestrel.rules.loader import load_rules
-from kestrel.tools.bank import block_card, liability_calculator, transaction_lookup
+from kestrel.connectors.mcp_client import transaction_lookup as mcp_transaction_lookup
+from kestrel.connectors.scope import mint as mint_scope
+from kestrel.tools.bank import block_card, liability_calculator
 from kestrel.tracing import root_span, traced
 
 FRAUD_INTENTS = {"card_payment_not_recognised", "compromised_card", "lost_or_stolen_card",
@@ -347,9 +349,22 @@ def tool_exec(state: ChatState) -> dict:
                 "_trace": {"status": "blocked", "detail": {"skipped": "idv_level 0", "calls": []}}}
 
     progress("tool_exec", "looking up transactions")
-    lk = transaction_lookup(account_id=account, card_last4=last4, as_of=as_of)
-    calls.append({"tool": "transaction_lookup", "args": {"account_id": account, "card_last4": last4},
+    # Through the read-only bank connector (MCP over stdio, D57). The scope is minted from what
+    # the session has, not from the model: the account on the agent's screen, card digits the
+    # agent typed (masked card numbers or "ending 1234"), and entities from earlier in this call.
+    # A card number the Supervisor LLM produced but the agent never typed is out of scope.
+    typed_cards = set((state.get("pii") or {}).get("card_last4") or []) | set(_TYPED_LAST4.findall(state.get("masked", "")))
+    token = mint_scope(subject=Principal.from_state(state.get("principal")).user_id,
+                       accounts=[a for a in (state.get("account_id"), ents.get("account_id")) if a],
+                       cards=[c for c in typed_cards | {ents.get("card_last4")} if c])
+    lk = mcp_transaction_lookup(scope_token=token, account_id=account, card_last4=last4, as_of=as_of)
+    calls.append({"tool": "transaction_lookup", "via": os.environ.get("TOOL_TRANSPORT", "mcp"),
+                  "args": {"account_id": account, "card_last4": last4},
                   "ok": lk.ok, "error": lk.error, "n": len(lk.data or [])})
+    if not lk.ok and (lk.error or "").startswith(("connector_timeout", "connector_unavailable")):
+        # No bank data means no draft: say so plainly instead of guessing (KB-RUNBOOK-INCIDENT).
+        lk.error = (f"bank lookup failed ({lk.error.split(':', 1)[0]}); no transaction data, so nothing was "
+                    "drafted. Retry, or check the core banking screen directly")
     rows = lk.data or []
     txn, why = (None, lk.error or "no card or account given") if not lk.ok else _pick_txn(rows, sup.get("amount_inr"))
     out: dict[str, Any] = {"tool_calls": calls, "txn": _jsonable(txn), "no_draft_reason": why}
@@ -411,6 +426,8 @@ def tool_exec(state: ChatState) -> dict:
     out["_trace"] = {"detail": {"calls": calls}, "status": "ok" if all(x["ok"] for x in calls) else "error"}
     return out
 
+
+_TYPED_LAST4 = re.compile(r"(?:XXXX-|\bending (?:in )?|\bcard (?:no\.? )?)(\d{4})\b", re.I)
 
 FEE_INTENTS = {"extra_charge_on_statement", "cash_withdrawal_charge", "card_payment_fee_charged", "transfer_fee_charged"}
 
@@ -685,7 +702,8 @@ def compliance_out(state: ChatState) -> dict:
     out = {"answer": ans, "citations": res["citations"], "script": script, "output_check": res,
            "_trace": {"status": "blocked" if res["verdict"] == "block" else "ok", "detail": res}}
     _emit("final", answer=ans, citations=res["citations"], script=script, draft=state.get("draft"),
-          output_check=res, card_block=state.get("card_block"), calc=state.get("calc"), refusal=state.get("refusal"))
+          output_check=res, card_block=state.get("card_block"), calc=state.get("calc"), refusal=state.get("refusal"),
+          no_draft_reason=state.get("no_draft_reason"))
     return out
 
 

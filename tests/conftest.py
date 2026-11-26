@@ -31,5 +31,7 @@ def reset_graph_singletons():
     import kestrel.graphs.case as case_graph
     import kestrel.graphs.chat as chat_graph
     get_checkpointer.cache_clear()
+    from kestrel.connectors import mcp_client
+    mcp_client.reset()   # the bank connector subprocess was spawned with the old DATABASE_URL
     case_graph._graph = None
     chat_graph._graph = None
