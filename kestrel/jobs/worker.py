@@ -13,6 +13,7 @@ import socket
 import time
 import traceback
 
+from kestrel import outbox
 from kestrel.jobs import enron_scan, memory_summary, queue, tat_sweep
 from kestrel.tracing import record_event, root_span
 
@@ -55,7 +56,13 @@ def main() -> None:
         if not a.once and time.time() >= next_sweep:
             queue.enqueue("tat_sweep", {}, requested_by="scheduler", dedupe_key="tat_sweep:scheduled")
             next_sweep = time.time() + sweep_every
-        busy = run_one(worker_id)
+        # Outbox events the API didn't finish (it crashed, or inline dispatch is off) (D55).
+        try:
+            sent = outbox.dispatch_due()["dispatched"]
+        except Exception:  # noqa: BLE001 - keep the job loop alive if Postgres blips
+            log.exception("outbox dispatch failed")
+            sent = 0
+        busy = run_one(worker_id) or bool(sent)
         if a.once and not busy:
             return
         if not busy:

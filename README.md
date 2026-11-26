@@ -54,6 +54,14 @@ Proof: `tests/integration/test_access_rag.py` makes the restricted `KB-FRAUD-PLA
 
 Limits: only one restricted document exists, so this is a mechanism, not a permission model; groups are seeded, with no admin UI; with an HNSW index pgvector filters the index's candidate list, so a very selective audience can return fewer than k chunks (lost recall, never a leak). Langfuse traces are visible to anyone with a Langfuse login and are not redacted.
 
+## Approvals: one transaction for the decision, one for the credit (D55)
+
+`POST /approvals/{id}` commits the decision, what it is bound to (transaction, amount, draft version, hash of the approved action) and an outbox event in **one** Postgres transaction. Executing it is driven by that event: the API dispatches it right after the commit, and if the API dies first, the worker (every second) or `reconcile()` at boot does. The credit, its ledger receipt, the case's new status and a `CreditPosted` event are a **second** single transaction keyed by the approval, so a replay reuses the receipt. Before posting, execution re-checks that the case and draft still match the approval and posts nothing if they don't.
+
+Proof (`tests/integration/test_outbox_recovery.py`, each step in its own process, crashes injected with `KESTREL_CRASH_AT`): killing the API after the approval commit leaves an unpublished event and no credit, and the next dispatch completes the case. Killing the worker after the credit commit, then replaying, leaves exactly one credit and one receipt, and the replay reports `reused_receipt`. A stale screen, a draft edited after submit, or a case altered after approval are refused. A case locked by another executor is retried, not doubled. The real-bank pattern (same idempotency key, look the key up after a timeout before retrying) is `ledger.post_remote_credit`. It is unit-tested against a fake bank and not wired to anything.
+
+Limits: chargebacks still file through their own idempotent write, not the single-transaction path. The notification is still drafted inside the case graph (step 3 moves it to a consumer).
+
 ## Hero demo (unauthorised ₹18,450 card payment)
 
 Sign in as `agent1`. In the UI: press **Ask copilot** (the sample text is pre-filled), then **Send to supervisor**, restart the app, sign in as `ananya` (or `farah` if the case needs an ops manager), open **Supervisor queue** and **Approve**.

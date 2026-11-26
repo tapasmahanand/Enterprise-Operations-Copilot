@@ -322,3 +322,47 @@ CREATE TABLE IF NOT EXISTS user_groups (
     group_name      TEXT NOT NULL,
     PRIMARY KEY (user_id, group_name)
 );
+
+-- Transactional outbox and bound approvals (D55) ------------------------------------
+-- A decision and the event that triggers its execution are committed together: either
+-- both exist or neither does. Execution happens later, from the outbox, and can be retried.
+CREATE TABLE IF NOT EXISTS outbox (
+    event_id        TEXT PRIMARY KEY,             -- deterministic, e.g. EVT-APR-1A2B-granted
+    event_type      TEXT NOT NULL,                -- ApprovalGranted | ApprovalRejected | CreditPosted
+    aggregate_id    TEXT NOT NULL,                -- case_id
+    payload         JSONB NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    published_at    TIMESTAMPTZ,                  -- handed on (dispatched, or acked by the broker)
+    attempts        INT NOT NULL DEFAULT 0,
+    claimed_until   TIMESTAMPTZ,                  -- lease, so two dispatchers don't take one event
+    last_error      TEXT
+);
+CREATE INDEX IF NOT EXISTS outbox_unpublished ON outbox (created_at) WHERE published_at IS NULL;
+
+-- What the supervisor approved, frozen at decision time. Execution refuses to post if the
+-- case, the draft or its version no longer match.
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_txn_id        TEXT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_amount_inr    INT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_draft_version INT;
+ALTER TABLE approvals ADD COLUMN IF NOT EXISTS bound_action_hash   TEXT;
+
+-- Any change to a draft's action bumps its version (nothing edits drafts today; this makes
+-- a future edit path unable to slip a different amount under an existing approval).
+ALTER TABLE drafts ADD COLUMN IF NOT EXISTS version INT NOT NULL DEFAULT 1;
+CREATE OR REPLACE FUNCTION drafts_bump_version() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.action IS DISTINCT FROM OLD.action THEN NEW.version := OLD.version + 1; END IF;
+    RETURN NEW;
+END $$;
+DROP TRIGGER IF EXISTS drafts_version ON drafts;
+CREATE TRIGGER drafts_version BEFORE UPDATE ON drafts FOR EACH ROW EXECUTE FUNCTION drafts_bump_version();
+
+-- Ledger receipts: one per idempotency key (credit:<approval_id>). Written in the same
+-- transaction as the credit and the case update, so a replay finds it and posts nothing.
+CREATE TABLE IF NOT EXISTS ledger_receipts (
+    idempotency_key TEXT PRIMARY KEY,
+    case_id         TEXT NOT NULL,
+    credit_id       TEXT NOT NULL,
+    response        JSONB NOT NULL,
+    recorded_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);

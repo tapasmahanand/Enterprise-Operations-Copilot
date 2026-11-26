@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from psycopg.types.json import Jsonb
 
+from kestrel import ledger, outbox
 from kestrel.auth import audit
 from kestrel.db import connect
-from kestrel.graphs.case import resume_case, start_case
+from kestrel.faults import crash_point
+from kestrel.graphs.case import decision_event, start_case
 from kestrel.tracing import trace_id_for
 
 if TYPE_CHECKING:
@@ -31,6 +35,16 @@ class Conflict(Exception):
     def __init__(self, existing: dict[str, Any]):
         super().__init__("already decided")
         self.existing = existing
+
+
+class Stale(Exception):
+    """The supervisor decided on a version of the case that is no longer the current one."""
+    def __init__(self, expected: dict[str, Any], actual: dict[str, Any]):
+        super().__init__("case changed since it was shown")
+        self.expected, self.actual = expected, actual
+
+
+log = logging.getLogger("cases")
 
 
 def submit_draft(draft_id: str, submitted_by: User | None = None) -> dict[str, Any]:
@@ -78,9 +92,15 @@ def submit_draft(draft_id: str, submitted_by: User | None = None) -> dict[str, A
 
 
 def decide(approval_id: str, decision: str, approver_id: str | None, reason: str | None,
-           decided_by: User | None = None) -> dict[str, Any]:
-    """Record the decision atomically (only one can win), then resume the case graph.
-    A second decision gets Conflict with the first one and changes nothing.
+           decided_by: User | None = None, expected: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Record the decision, bind it to the exact transaction, amount and draft version, and
+    write its outbox event: one transaction (D55). Only one decision can win; a second gets
+    Conflict with the first and changes nothing. `expected` ({txn_id, amount_inr,
+    draft_version}, any subset) is what the supervisor's screen showed; a mismatch is Stale.
+
+    Execution is not part of the decision: it is driven by the outbox event. By default the
+    API dispatches that event right after the commit so the supervisor sees the outcome; if
+    the process dies first, the worker or reconcile() picks it up.
 
     Through the API, `decided_by` is the signed-in supervisor and the approver identity is
     their org_directory person, whatever `approver_id` says (D50). The supervisor also may not
@@ -107,10 +127,21 @@ def decide(approval_id: str, decision: str, approver_id: str | None, reason: str
                   {"decision": decision, "approver_id": approver_id, "needs": need[0], "why": denied})
             conn.commit()
             raise Forbidden(denied)
+        bound = ledger.binding_for(conn, approval_id)
+        if expected:
+            diff = {k: v for k, v in expected.items() if v is not None and bound.get(k) != v}
+            if diff:
+                audit(conn, decided_by, "approval_stale", "approval", approval_id,
+                      {"expected": expected, "actual": {k: bound.get(k) for k in diff}})
+                conn.commit()
+                raise Stale(expected, {k: bound.get(k) for k in diff})
         won = conn.execute(
-            """UPDATE approvals SET state = %s, approver_id = %s, reason = %s, decided_at = now(), decided_by = %s
-               WHERE approval_id = %s AND state = 'pending' RETURNING case_id""",
-            (new_state, approver_id, reason, decided_by.user_id if decided_by else None, approval_id)).fetchone()
+            """UPDATE approvals SET state = %s, approver_id = %s, reason = %s, decided_at = now(), decided_by = %s,
+                      bound_txn_id = %s, bound_amount_inr = %s, bound_draft_version = %s, bound_action_hash = %s
+               WHERE approval_id = %s AND state = 'pending' RETURNING case_id, action_payload""",
+            (new_state, approver_id, reason, decided_by.user_id if decided_by else None,
+             bound["txn_id"], bound["amount_inr"], bound["draft_version"], bound["action_hash"],
+             approval_id)).fetchone()
         if won is None:
             ex = conn.execute("SELECT case_id, state, approver_id, reason, decided_at FROM approvals WHERE approval_id = %s",
                               (approval_id,)).fetchone()
@@ -121,12 +152,18 @@ def decide(approval_id: str, decision: str, approver_id: str | None, reason: str
                 raise NotFound(approval_id)
             raise Conflict({"approval_id": approval_id, "case_id": ex[0], "state": ex[1], "approver_id": ex[2],
                             "reason": ex[3], "decided_at": ex[4].isoformat() if ex[4] else None})
+        event_id = decision_event(conn, won[0], approval_id, new_state, reason, approver_id, won[1])
         audit(conn, decided_by, "approval_decided", "approval", approval_id,
               {"case_id": won[0], "decision": decision, "approver_id": approver_id, "approver_tier": who[0],
-               "needs": need[0], "reason": reason})
+               "needs": need[0], "reason": reason, "bound": bound, "event_id": event_id})
         conn.commit()
     case_id = won[0]
-    resume_case(case_id, {"decision": decision, "reason": reason, "approver_id": approver_id})
+    crash_point("after_approval_commit")   # recovery test hook: decided, event not yet handled
+    if os.environ.get("OUTBOX_INLINE_DISPATCH", "1") == "1":
+        try:
+            outbox.dispatch_due(limit=1, event_id=event_id)
+        except Exception:  # noqa: BLE001 - the decision is committed; the worker retries the event
+            log.exception("inline dispatch of %s failed; left for the worker", event_id)
     return get_case(case_id)
 
 
@@ -151,12 +188,12 @@ def pending_approvals() -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             """SELECT a.approval_id, a.case_id, a.approver_role, a.action_payload, c.due_at, c.evidence,
-                      c.recommended_action, a.created_at, c.status
-               FROM approvals a JOIN cases c USING (case_id)
+                      c.recommended_action, a.created_at, c.status, d.version
+               FROM approvals a JOIN cases c USING (case_id) LEFT JOIN drafts d ON d.draft_id = c.draft_id
                WHERE a.state = 'pending' ORDER BY c.due_at NULLS LAST, a.created_at""").fetchall()
     return [{"approval_id": r[0], "case_id": r[1], "approver_role": r[2], "action": r[3],
              "due_at": r[4].isoformat() if r[4] else None, "evidence": r[5], "calc": (r[6] or {}).get("calc"),
-             "created_at": r[7].isoformat(), "case_status": r[8]} for r in rows]
+             "created_at": r[7].isoformat(), "case_status": r[8], "draft_version": r[9]} for r in rows]
 
 
 def create_draft(session_id: str, run_id: str, action: dict, evidence: list, calc: dict | None) -> str:
